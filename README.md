@@ -15,8 +15,12 @@ Build sparse graphs from:
 import numpy as np
 from graphconstructor import build_knn_graph, build_epsilon_ball_graph
 
-# From a distance matrix
-D = np.random.rand(10, 10); D = (D + D.T)/2; np.fill_diagonal(D, 0.0)
+# Create dummy distance matrix
+D = np.random.rand(10, 10)
+D = (D + D.T)/2
+np.fill_diagonal(D, 0.0)
+
+# Construct graph from distance matrix
 G1 = build_epsilon_ball_graph(matrix=D, mode="distance", threshold=0.5)
-G2 = build_knn_graph(matrix=D, k=5, mutual=True)
+G2 = build_knn_graph(matrix=D, mode="distance", k=5, mutual=True)
 ```
