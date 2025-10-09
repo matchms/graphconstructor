@@ -1,8 +1,11 @@
 from dataclasses import dataclass
 from typing import Optional, Literal
+from abc import ABC, abstractmethod
+
 import numpy as np
 from numpy.typing import NDArray
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, spmatrix
+import scipy.sparse as sp
 
 from .types import MatrixMode, CSRMatrix
 from .adapters import MatrixInput, KNNInput, ANNInput
@@ -11,18 +14,43 @@ from .utils import (
     _coerce_knn_inputs,
     _threshold_mask,
     _csr_from_edges,
+    _as_csr_square,
+    _knn_from_matrix,
 )
 
 
 @dataclass(slots=True)
 class GraphConstructionConfig:
+    """Common configuration for all graph constructors.
+
+    Parameters
+    ----------
+    symmetric
+        If True, symmetrize the resulting adjacency using `symmetrize_op`.
+    symmetrize_op
+        Strategy to combine reciprocal edges when `symmetric=True`.
+        One of {"max", "min", "average"}.
+    store_weights
+        If False, store all edges with weight 1.0 regardless of input values.
+    self_loops
+        If False, diagonal entries are cleared before returning.
+    """
+
     symmetric: bool = True
     symmetrize_op: Literal["max", "min", "average"] = "max"
-    store_weights: bool = True  # False -> unweighted (all weights = 1)
+    store_weights: bool = True
     self_loops: bool = False
 
 
-class BaseGraphConstructor:
+class BaseGraphConstructor(ABC):
+    """Abstract base for graph constructors.
+
+    Subclasses must implement :meth:`from_matrix` and :meth:`from_knn`.
+    This base class also provides a generic :meth:`from_ann` that converts
+    an ANN index to `(indices, distances)` and then delegates to
+    :meth:`from_knn`.
+    """
+
     def __init__(self, config: Optional[GraphConstructionConfig] = None) -> None:
         self.config = config or GraphConstructionConfig()
 
@@ -34,13 +62,65 @@ class BaseGraphConstructor:
             A = _make_symmetric_csr(A, option=self.config.symmetrize_op)
         return A.astype(float, copy=False)
 
+    @abstractmethod
+    def from_matrix(self, matrix: NDArray | spmatrix, *, mode: MatrixMode = "distance") -> CSRMatrix:
+        """Build the graph from a square distance/similarity matrix.
+
+        Implementations **must** support both dense NumPy arrays and SciPy sparse
+        matrices (ideally CSR/CSC). Implementations MUST NOT densify sparse inputs.
+        """
+
+    @abstractmethod
+    def from_knn(self, indices: NDArray, distances: NDArray) -> CSRMatrix:
+        """Build the graph from precomputed kNN arrays of shape (n, k)."""
+
+    def from_ann(self, ann: ANNInput, *, k: Optional[int] = None) -> CSRMatrix:
+        """Build the graph by querying an approximate nearest-neighbor index.
+
+        The default implementation extracts `(indices, distances)` from the
+        ANN object if available (attributes `indices_`, `distances_`), otherwise
+        it performs a query with the requested `k` and delegates to
+        :meth:`from_knn`.
+
+        Notes
+        -----
+        - For epsilon-ball graphs this path relies on a kNN truncation and may
+          miss neighbors outside the top-`k`. Choose a sufficiently large `k`
+          when using ANN with epsilon-ball construction.
+        """
+        idx = ann.index
+        if hasattr(idx, "indices_") and getattr(idx, "indices_") is not None:
+            ind = np.asarray(getattr(idx, "indices_"))
+            dist = np.asarray(getattr(idx, "distances_"))
+            if k is not None:
+                ind = ind[:, :k]
+                dist = dist[:, :k]
+            return self.from_knn(ind, dist)
+        if ann.query_data is None:
+            raise TypeError(
+                "ANNInput requires query_data when the index has no precomputed neighbors.")
+        if k is None:
+            raise TypeError("from_ann requires parameter k when querying the index.")
+        ind, dist = idx.query(ann.query_data, k=k)
+        return self.from_knn(ind, dist)
+
+
+# ---------------------------------------------------------------------------
+# Concrete constructors
+# ---------------------------------------------------------------------------
 
 class KNNGraphConstructor(BaseGraphConstructor):
     """Construct a graph by connecting each node to its k nearest neighbors.
 
-    Supports mutual edges mode (keep only edges i->j where j is in i's neighbors
-    **and** i is in j's neighbors) and accepts (a) a distance/similarity matrix,
-    (b) precomputed kNN arrays, or (c) an ANN index.
+    Parameters
+    ----------
+    k
+        Number of neighbors per node.
+    mutual
+        If True, keep only edges that are reciprocal in the kNN relation.
+    mode
+        Interpret inputs as "distance" (smaller = closer) or "similarity"
+        (larger = closer).
     """
 
     def __init__(self, k: int, mutual: bool = False, mode: MatrixMode = "distance",
@@ -54,88 +134,79 @@ class KNNGraphConstructor(BaseGraphConstructor):
         self.mutual = bool(mutual)
         self.mode = mode
 
-    # ----- Entry points for the three starting points -----
-    def from_matrix(self, matrix: NDArray) -> CSRMatrix:
-        M = np.asarray(matrix, dtype=float)
-        n = M.shape[0]
-        # For similarity, larger = closer -> use argsort descending
-        if self.mode == "distance":
-            nn_idx = np.argpartition(M, kth=self.k, axis=1)[:, : self.k]
-            nn_dist = np.take_along_axis(M, nn_idx, axis=1)
-        else:  # similarity
-            nn_idx = np.argpartition(-M, kth=self.k, axis=1)[:, : self.k]
-            nn_dist = np.take_along_axis(M, nn_idx, axis=1)
-        return self._build_from_knn_arrays(nn_idx, nn_dist, n)
+    def from_matrix(self, matrix: NDArray | spmatrix, *, mode: MatrixMode = None) -> CSRMatrix:
+        mode = self.mode if mode is None else mode
+        ind, dist = _knn_from_matrix(matrix, self.k, mode=mode)
+        return self.from_knn(ind, dist)
 
     def from_knn(self, indices: NDArray, distances: NDArray) -> CSRMatrix:
         ind, dist = _coerce_knn_inputs(indices, distances)
         n = ind.shape[0]
-        return self._build_from_knn_arrays(ind, dist, n)
-
-    def from_ann(self, ann: ANNInput) -> CSRMatrix:
-        idx = ann.index
-        # Prefer precomputed neighbor graph if present
-        if hasattr(idx, "indices_") and getattr(idx, "indices_") is not None:
-            ind = np.asarray(getattr(idx, "indices_"))[:, : self.k]
-            dist = np.asarray(getattr(idx, "distances_"))[:, : self.k]
-            n = ind.shape[0]
-            return self._build_from_knn_arrays(ind, dist, n)
-        # Otherwise query using provided query_data or the index itself if it supports it
-        if ann.query_data is None:
-            raise TypeError(
-                "ANNInput requires query_data when the index has no precomputed neighbors.")
-        ind, dist = idx.query(ann.query_data, k=self.k)
-        n = ind.shape[0]
-        return self._build_from_knn_arrays(ind, dist, n)
-
-    # ----- Core -----
-    def _build_from_knn_arrays(self, indices: NDArray, distances: NDArray, n: int) -> CSRMatrix:
-        rows = np.repeat(np.arange(n), indices.shape[1])
-        cols = indices.reshape(-1)
-        weights = distances.reshape(-1)
+        rows = np.repeat(np.arange(n), ind.shape[1])
+        cols = ind.reshape(-1)
+        weights = dist.reshape(-1)
         if not self.config.store_weights:
             weights = np.ones_like(weights, dtype=float)
         A = _csr_from_edges(n, rows, cols, weights)
         if self.mutual:
-            # Keep only edges present in both directions; use Hadamard product of boolean structure
-            B = A.multiply(A.T.sign())  # zeroes non-mutual edges; preserves weights from A
-            A = B
+            # Keep only edges present in both directions; preserves weights from A
+            A = A.multiply(A.T.sign())
         return self._finalize(A)
 
 
 class EpsilonBallGraphConstructor(BaseGraphConstructor):
     """Connect all pairs (i, j) where distance < ε or similarity > τ.
 
-    Works from (a) a square matrix, or (b) precomputed kNN arrays (filtered by threshold).
+    Parameters
+    ----------
+    threshold
+        ε for distance mode, or τ for similarity mode.
+    mode
+        "distance" or "similarity".
+
+    Notes
+    -----
+    - :meth:`from_ann` in the base class delegates to :meth:`from_knn` after
+      querying top-`k` neighbors. Set `k` high enough to avoid missing edges.
     """
 
     def __init__(self, threshold: float, mode: MatrixMode = "distance",
                  config: Optional[GraphConstructionConfig] = None) -> None:
         super().__init__(config)
-        if threshold <= 0 and mode == "distance":
-            # allow zero if explicitly desired but negative makes no sense
-            pass
-        self.threshold = float(threshold)
         if mode not in ("distance", "similarity"):
             raise TypeError("mode must be 'distance' or 'similarity'.")
+        self.threshold = float(threshold)
         self.mode = mode
 
-    def from_matrix(self, matrix: NDArray) -> CSRMatrix:
-        M = np.asarray(matrix, dtype=float)
-        n = M.shape[0]
-        mask = _threshold_mask(M, self.threshold, self.mode)
-        rows, cols = mask.nonzero()
-        weights = M[rows, cols]
+    def from_matrix(self, matrix: NDArray | spmatrix, *, mode: MatrixMode = None) -> CSRMatrix:
+        mode = self.mode if mode is None else mode
+        csr, n = _as_csr_square(matrix)
+        # Apply threshold without densifying
+        data = csr.data
+        if mode == "distance":
+            keep = data < self.threshold
+        else:
+            keep = data > self.threshold
+        rows, cols = sp.find(csr)[0:2]  # slower for huge matrices; but we reuse CSR internals below
+        # More efficient: reconstruct from row slices
+        pruned = csr.copy()
+        pruned.data = pruned.data[keep]
+        # We must also shrink indices/indptr accordingly; easiest is to build from COO of kept mask
+        coo = csr.tocoo()
+        mask = keep
+        rows = coo.row[mask]
+        cols = coo.col[mask]
+        weights = coo.data[mask]
         if not self.config.store_weights:
             weights = np.ones_like(weights, dtype=float)
         A = csr_matrix((weights, (rows, cols)), shape=(n, n))
         return self._finalize(A)
 
-    def from_knn(self, indices: NDArray, distances: NDArray, n: Optional[int] = None) -> CSRMatrix:
+    def from_knn(self, indices: NDArray, distances: NDArray) -> CSRMatrix:
         ind, dist = _coerce_knn_inputs(indices, distances)
-        n = int(n if n is not None else ind.shape[0])
+        n = ind.shape[0]
         mask = _threshold_mask(dist, self.threshold, self.mode)
-        rows = np.repeat(np.arange(ind.shape[0]), ind.shape[1])[mask.ravel()]
+        rows = np.repeat(np.arange(n), ind.shape[1])[mask.ravel()]
         cols = ind.ravel()[mask.ravel()]
         weights = dist.ravel()[mask.ravel()]
         if not self.config.store_weights:
