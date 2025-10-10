@@ -1,4 +1,3 @@
-# tests/test_epsilon_ball_graph_constructor.py
 import numpy as np
 import pytest
 import scipy.sparse as sp
@@ -23,7 +22,7 @@ def test_from_matrix_dense_distance_threshold_and_symmetrize_max():
     ], dtype=float)
 
     # default config: symmetric=True (max), self_loops=False, store_weights=True
-    gc = EpsilonBallGraphConstructor(threshold=0.5, mode="distance")
+    gc = EpsilonBallGraphConstructor(threshold=0.5, mode="distance", out="array")
     A = gc.from_matrix(M)
 
     assert isinstance(A, sp.csr_matrix) and A.shape == (3, 3)
@@ -54,7 +53,7 @@ def test_from_matrix_dense_similarity_threshold_and_symmetrize_max():
         [0.4, 0.85, 1.0],
     ], dtype=float)
 
-    gc = EpsilonBallGraphConstructor(threshold=0.75, mode="similarity")
+    gc = EpsilonBallGraphConstructor(threshold=0.75, mode="similarity", out="array")
     A = gc.from_matrix(S)
 
     assert (A != A.T).nnz == 0
@@ -76,7 +75,7 @@ def test_from_matrix_sparse_distance_no_densify_needed_behaviour():
     data = np.array([0.35, 0.6, 0.2, 0.39, 0.8, 0.1])
     M = sp.csr_matrix((data, (rows, cols)), shape=(4, 4))
 
-    gc = EpsilonBallGraphConstructor(threshold=0.4, mode="distance")
+    gc = EpsilonBallGraphConstructor(threshold=0.4, mode="distance", out="array")
     A = gc.from_matrix(M)
 
     # Kept edges: (0,1)=0.35, (1,0)=0.2, (2,3)=0.39, (3,2)=0.1
@@ -95,7 +94,7 @@ def test_from_matrix_mode_override_similarity_on_distance_instance():
         [0.2, 1.0, 0.85],
         [0.7, 0.6, 1.0],
     ])
-    gc = EpsilonBallGraphConstructor(threshold=0.8, mode="distance")
+    gc = EpsilonBallGraphConstructor(threshold=0.8, mode="distance", out="array")
     A = gc.from_matrix(S, mode="similarity")
 
     # Keep > 0.8: (0,1)=0.9, (1,2)=0.85
@@ -118,7 +117,7 @@ def test_from_knn_distance_threshold_and_self_loops_removed():
         [0.4, 0.0, 0.2],   # keep (1->2)
         [0.9, 0.25, 0.0],  # keep (2->1)
     ])
-    gc = EpsilonBallGraphConstructor(threshold=0.35, mode="distance")
+    gc = EpsilonBallGraphConstructor(threshold=0.35, mode="distance", out="array")
     A = gc.from_knn(indices, dist)
 
     # self-loops removed, symmetric (max)
@@ -145,7 +144,7 @@ def test_from_knn_similarity_threshold_and_unit_weights_when_store_weights_false
         [0.1, 0.95], # keep 2->1
     ])
     cfg = GraphConstructionConfig(store_weights=False, symmetric=True, self_loops=False)
-    gc = EpsilonBallGraphConstructor(threshold=0.7, mode="similarity", config=cfg)
+    gc = EpsilonBallGraphConstructor(threshold=0.7, mode="similarity", out="array", config=cfg)
     A = gc.from_knn(indices, sims)
 
     # All kept edges must have weight 1.0 after store_weights=False

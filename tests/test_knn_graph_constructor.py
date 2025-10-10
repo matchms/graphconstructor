@@ -1,5 +1,5 @@
-# tests/test_base_graph_constructor.py
 import numpy as np
+import networkx as nx
 import pytest
 import scipy.sparse as sp
 
@@ -25,7 +25,7 @@ def test_from_matrix_dense_distance_k2_symmetric_result():
         [0.8, 0.6, 0.0, 0.5],
         [0.3, 0.4, 0.5, 0.0],
     ])
-    gc = KNNGraphConstructor(k=2, mode="distance")  # default config: symmetric=True, self_loops=False
+    gc = KNNGraphConstructor(k=2, mode="distance", out="array")  # default config: symmetric=True, self_loops=False
     A = gc.from_matrix(M)
 
     # shape, float dtype, symmetric, and no self-loops
@@ -53,7 +53,7 @@ def test_from_matrix_sparse_distance_k1_enough_offdiagonals():
     data = np.array([0.1, 0.7, 0.2, 0.4, 0.3, 0.9])
     M = sp.csr_matrix((data, (rows, cols)), shape=(3, 3))
 
-    gc = KNNGraphConstructor(k=1, mode="distance")
+    gc = KNNGraphConstructor(k=1, mode="distance", out="array")
     A = gc.from_matrix(M)
 
     # With k=1 (smallest distance):
@@ -78,7 +78,7 @@ def test_from_matrix_mode_override_similarity_on_distance_instance():
         [0.8, 1.0, 0.3],
         [0.5, 0.4, 1.0],
     ])
-    gc = KNNGraphConstructor(k=1, mode="distance")
+    gc = KNNGraphConstructor(k=1, mode="distance", out="array")
     A = gc.from_matrix(S, mode="similarity")
 
     # For similarity, each row picks the largest off-diagonal:
@@ -98,7 +98,7 @@ def test_mutual_removes_non_reciprocal_and_preserves_weights_then_symmetrizes():
     dist = np.array([[0.2], [0.4], [0.6]])
 
     cfg = GraphConstructionConfig(symmetric=True, symmetrize_op="max", self_loops=False)
-    gc = KNNGraphConstructor(k=1, mutual=True, mode="distance", config=cfg)
+    gc = KNNGraphConstructor(k=1, mutual=True, mode="distance", out="array", config=cfg)
     A = gc.from_knn(ind, dist)
 
     # No pair is reciprocal -> all edges dropped; finalize keeps it zero & symmetric
@@ -124,7 +124,7 @@ def test_mutual_removes_non_reciprocal_and_preserves_weights_then_symmetrizes():
 # ----------------- store_weights = False -----------------
 def test_store_weights_false_sets_unit_weights():
     cfg = GraphConstructionConfig(symmetric=False, self_loops=False, store_weights=False)
-    gc = KNNGraphConstructor(k=2, mutual=False, mode="distance", config=cfg)
+    gc = KNNGraphConstructor(k=2, mutual=False, out="array", mode="distance", config=cfg)
 
     ind = np.array([[1, 2], [0, 2], [0, 1]])
     dist = np.array([[0.2, 0.9], [0.3, 0.4], [0.5, 0.6]])
@@ -137,3 +137,94 @@ def test_store_weights_false_sets_unit_weights():
     # Not forced symmetric in this config (but happens to be symmetric by construction here)
     assert np.allclose(A.diagonal(), 0.0)
 
+
+def test_networkx_default_undirected_from_matrix_distance():
+    # Symmetric distance matrix; k=2; default config => symmetric graph, no self-loops
+    M = np.array([
+        [0.0, 0.2, 0.8, 0.3],
+        [0.2, 0.0, 0.6, 0.4],
+        [0.8, 0.6, 0.0, 0.5],
+        [0.3, 0.4, 0.5, 0.0],
+    ])
+    gc = KNNGraphConstructor(k=2, mode="distance")  # out defaults to "networkx"
+    G = gc.from_matrix(M)
+
+    # Type & undirected due to symmetric=True (default)
+    assert isinstance(G, nx.Graph)
+    assert not any(u == v for u, v in G.edges())  # no self-loops
+
+    # Weights mirror the symmetrized CSR (max) which equals original distances for symmetric M
+    assert pytest.approx(G[0][1]["weight"]) == 0.2
+    assert pytest.approx(G[0][3]["weight"]) == 0.3
+    assert pytest.approx(G[1][3]["weight"]) == 0.4
+    assert pytest.approx(G[2][3]["weight"]) == 0.5
+
+
+def test_networkx_directed_when_symmetric_false_and_unit_weights():
+    # Asymmetric selection; store_weights=False => all weights become 1.0
+    cfg = GraphConstructionConfig(symmetric=False, self_loops=False, store_weights=False)
+    gc = KNNGraphConstructor(k=1, mode="distance", config=cfg)
+
+    # n=2, each selects the other as its single neighbor
+    ind = np.array([[1], [0]])
+    dist = np.array([[0.2], [0.9]])
+    G = gc.from_knn(ind, dist)
+
+    # Directed graph due to symmetric=False
+    assert isinstance(G, nx.DiGraph)
+    # Two directed edges, unit weights
+    assert G.has_edge(0, 1) and G.has_edge(1, 0)
+    assert pytest.approx(G[0][1]["weight"]) == 1.0
+    assert pytest.approx(G[1][0]["weight"]) == 1.0
+    # No self-loops
+    assert not G.has_edge(0, 0) and not G.has_edge(1, 1)
+
+
+def test_networkx_mutual_k_allows_edges_beyond_top_k_but_limited_to_k():
+    # k=1 but mutual_k=2: allow an edge if nodes are within each other's top-2
+    # even when not both in top-1; keep at most 1 edge per node (k).
+    gc = KNNGraphConstructor(k=1, mutual=True, mutual_k=2, mode="distance")
+
+    # Indices have two columns (base_k=2) to let mutual_k=2 take effect
+    # Row-wise neighbor lists (by rank):
+    # 0: [1, 2]   -> prefers 1 first
+    # 1: [2, 0]   -> prefers 2 first, but 0 is within top-2
+    # 2: [1, 0]
+    ind = np.array([
+        [1, 2],
+        [2, 0],
+        [1, 0],
+    ])
+    # Distances for the chosen positions
+    dist = np.array([
+        [0.2, 0.9],  # 0->1 has weight 0.2
+        [0.3, 0.4],  # 1->2 has weight 0.3; 1->0 would have 0.4 (not picked due to k=1)
+        [0.5, 0.6],  # 2->1 has weight 0.5
+    ])
+
+    G = gc.from_knn(ind, dist)
+
+    # Default symmetric=True -> undirected graph
+    assert isinstance(G, nx.Graph)
+
+    # (0,1) is accepted because 1 is in 0's top-2 AND 0 is in 1's top-2,
+    # even though 1 does not *select* 0 in its top-1 (k=1).
+    # Only 0->1 was added directionally; finalize(sym='max') mirrors to undirected with weight 0.2.
+    assert G.has_edge(0, 1)
+    assert pytest.approx(G[0][1]["weight"]) == 0.2
+
+    # For (1,2): mutual within top-2 and 1's first choice is 2 -> edge weight 0.3 (no opposing larger weight)
+    assert G.has_edge(1, 2)
+    assert pytest.approx(G[1][2]["weight"]) == 0.5
+
+    # (0,2) not mutual within top-2 in both directions for the *positions considered with k=1 per node*
+    # and given earlier picks, so it should not be present
+    assert not G.has_edge(0, 2)
+
+    # Test again with symmetric=False to get a directed graph
+    cfg = GraphConstructionConfig(symmetric=False)
+    gc = KNNGraphConstructor(k=1, mutual=True, mutual_k=2, mode="distance", config=cfg)
+    G = gc.from_knn(ind, dist)
+    assert isinstance(G, nx.DiGraph)
+    assert pytest.approx(G[1][2]["weight"]) == 0.3
+    assert pytest.approx(G[2][1]["weight"]) == 0.5

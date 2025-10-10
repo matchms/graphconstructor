@@ -1,12 +1,17 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
+import networkx as nx
 import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import spmatrix
 from ..adapters import ANNInput
 from ..types import CSRMatrix, MatrixMode
 from ..utils import _make_symmetric_csr
+
+
+NXOut = Union[nx.Graph, nx.DiGraph]
+OutType = Literal["networkx", "array"]
 
 
 @dataclass(slots=True)
@@ -51,6 +56,19 @@ class BaseGraphConstructor(ABC):
         if self.config.symmetric:
             A = _make_symmetric_csr(A, option=self.config.symmetrize_op)
         return A.astype(float, copy=False)
+
+    def _to_output(self, A: CSRMatrix) -> Union[CSRMatrix, NXOut]:
+        """Convert the finalized CSR matrix to the requested output type."""
+        if self.out == "array":
+            return A
+        # networkx output
+        if self.config.symmetric:
+            # Undirected graph
+            G = nx.from_scipy_sparse_array(A, parallel_edges=False, create_using=nx.Graph)
+        else:
+            # Directed graph
+            G = nx.from_scipy_sparse_array(A, parallel_edges=False, create_using=nx.DiGraph)
+        return G
 
     @abstractmethod
     def from_matrix(self, matrix: NDArray | spmatrix, *, mode: MatrixMode = "distance") -> CSRMatrix:

@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Literal, Optional, Union
+import networkx as nx
 import numpy as np
 import scipy.sparse as sp
 from numpy.typing import NDArray
@@ -10,6 +11,10 @@ from ..utils import (
     _threshold_mask,
 )
 from . import BaseGraphConstructor, GraphConstructionConfig
+
+
+NXOut = Union[nx.Graph, nx.DiGraph]
+OutType = Literal["networkx", "array"]
 
 
 class EpsilonBallGraphConstructor(BaseGraphConstructor):
@@ -28,15 +33,23 @@ class EpsilonBallGraphConstructor(BaseGraphConstructor):
       querying top-`k` neighbors. Set `k` high enough to avoid missing edges.
     """
 
-    def __init__(self, threshold: float, mode: MatrixMode = "distance",
+    def __init__(self, threshold: float,
+                 mode: MatrixMode = "distance",
+                 out: OutType = "networkx",
                  config: Optional[GraphConstructionConfig] = None) -> None:
         super().__init__(config)
         if mode not in ("distance", "similarity"):
             raise TypeError("mode must be 'distance' or 'similarity'.")
         self.threshold = float(threshold)
+        self.out: OutType = out
         self.mode = mode
 
-    def from_matrix(self, matrix: NDArray | spmatrix, *, mode: MatrixMode = None) -> CSRMatrix:
+    def from_matrix(
+        self,
+        matrix: NDArray | spmatrix,
+        *,
+        mode: MatrixMode = None
+    ) -> Union[CSRMatrix, NXOut]:
         mode = self.mode if mode is None else mode
         csr, n = _as_csr_square(matrix)
         # Apply threshold without densifying
@@ -58,9 +71,9 @@ class EpsilonBallGraphConstructor(BaseGraphConstructor):
         if not self.config.store_weights:
             weights = np.ones_like(weights, dtype=float)
         A = csr_matrix((weights, (rows, cols)), shape=(n, n))
-        return self._finalize(A)
+        return self._to_output(self._finalize(A))
 
-    def from_knn(self, indices: NDArray, distances: NDArray) -> CSRMatrix:
+    def from_knn(self, indices: NDArray, distances: NDArray) -> Union[CSRMatrix, NXOut]:
         ind, dist = _coerce_knn_inputs(indices, distances)
         n = ind.shape[0]
         mask = _threshold_mask(dist, self.threshold, self.mode)
@@ -70,4 +83,4 @@ class EpsilonBallGraphConstructor(BaseGraphConstructor):
         if not self.config.store_weights:
             weights = np.ones_like(weights, dtype=float)
         A = csr_matrix((weights, (rows, cols)), shape=(n, n))
-        return self._finalize(A)
+        return self._to_output(self._finalize(A))
