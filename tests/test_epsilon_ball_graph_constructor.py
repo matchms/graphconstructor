@@ -1,4 +1,5 @@
 import numpy as np
+import networkx as nx
 import pytest
 import scipy.sparse as sp
 
@@ -153,3 +154,109 @@ def test_from_knn_similarity_threshold_and_unit_weights_when_store_weights_false
     assert A[1, 2] == 1.0 and A[2, 1] == 1.0
     assert np.allclose(A.diagonal(), 0.0)
     assert (A != A.T).nnz == 0
+
+
+def test_networkx_default_undirected_from_matrix_distance():
+    # Asymmetric distances; ε = 0.5. Keep entries < 0.5.
+    M = np.array([
+        [0.0, 0.4, 0.7],
+        [0.49, 0.0, 0.9],
+        [0.6, 0.45, 0.0],
+    ], dtype=float)
+
+    # out defaults to "networkx", config defaults to symmetric=True, symmetrize_op="max"
+    gc = EpsilonBallGraphConstructor(threshold=0.5, mode="distance")
+    G = gc.from_matrix(M)
+
+    assert isinstance(G, nx.Graph)  # undirected by default
+    # no self-loops
+    assert not any(u == v for u, v in G.edges())
+
+    # (0,1)=0.4 and (1,0)=0.49 kept -> max sym => 0.49
+    assert pytest.approx(G[0][1]["weight"]) == 0.49
+    # (2,1)=0.45 kept; (1,2)=0.9 not kept -> mirrored as 0.45
+    assert pytest.approx(G[1][2]["weight"]) == 0.45
+    # (0,2) not kept
+    assert not G.has_edge(0, 2)
+
+
+def test_networkx_directed_when_symmetric_false_from_matrix_distance():
+    # ε = 0.4. Build a tiny dense matrix where only certain directions pass.
+    M = np.array([
+        [0.0, 0.35, 0.6],
+        [0.2,  0.0,  0.9],
+        [0.7,  0.39, 0.0],
+    ], dtype=float)
+    cfg = GraphConstructionConfig(symmetric=False, self_loops=False)
+    gc = EpsilonBallGraphConstructor(threshold=0.4, mode="distance", config=cfg)
+
+    G = gc.from_matrix(M)
+    assert isinstance(G, nx.DiGraph)  # directed due to symmetric=False
+
+    # Edges that pass ε: 0->1 (0.35), 1->0 (0.2), 2->1 (0.39)
+    assert G.has_edge(0, 1) and pytest.approx(G[0][1]["weight"]) == 0.35
+    assert G.has_edge(1, 0) and pytest.approx(G[1][0]["weight"]) == 0.2
+    assert G.has_edge(2, 1) and pytest.approx(G[2][1]["weight"]) == 0.39
+    # No self-loops present
+    assert not G.has_edge(0, 0) and not G.has_edge(1, 1) and not G.has_edge(2, 2)
+
+
+def test_networkx_store_weights_false_similarity_from_knn_unit_weights():
+    # τ = 0.75. Keep > τ. store_weights=False => all kept edges weight 1.0
+    indices = np.array([
+        [1, 2],
+        [2, 0],
+        [0, 1],
+    ])
+    sims = np.array([
+        [0.8, 0.4],   # 0->1 kept
+        [0.9, 0.6],   # 1->2 kept
+        [0.1, 0.95],  # 2->1 kept
+    ])
+    cfg = GraphConstructionConfig(store_weights=False, symmetric=True, self_loops=False)
+    gc = EpsilonBallGraphConstructor(threshold=0.75, mode="similarity", config=cfg)
+
+    G = gc.from_knn(indices, sims)
+    assert isinstance(G, nx.Graph)
+    # All kept edges must be weight 1.0 after symmetrization
+    assert G.has_edge(0, 1) and pytest.approx(G[0][1]["weight"]) == 1.0
+    assert G.has_edge(1, 2) and pytest.approx(G[1][2]["weight"]) == 1.0
+    # no self-loops
+    assert not G.has_edge(0, 0) and not G.has_edge(1, 1) and not G.has_edge(2, 2)
+
+
+def test_networkx_mode_override_on_from_matrix():
+    # Construct instance with mode="distance" but call with mode="similarity"
+    S = np.array([
+        [1.0, 0.9, 0.3],
+        [0.2, 1.0, 0.85],
+        [0.7, 0.6, 1.0],
+    ], dtype=float)
+
+    gc = EpsilonBallGraphConstructor(threshold=0.8, mode="distance")  # out defaults to networkx
+    G = gc.from_matrix(S, mode="similarity")
+
+    assert isinstance(G, nx.Graph)
+    # Keep > 0.8: (0,1)=0.9 and (1,2)=0.85; sym (max) keeps those weights
+    assert G.has_edge(0, 1) and pytest.approx(G[0][1]["weight"]) == 0.9
+    assert G.has_edge(1, 2) and pytest.approx(G[1][2]["weight"]) == 0.85
+
+
+def test_networkx_sparse_input_path_distance():
+    # Sparse 4x4; ε = 0.4
+    rows = np.array([0, 0, 1, 2, 3, 3])
+    cols = np.array([1, 2, 0, 3, 0, 2])
+    data = np.array([0.35, 0.6, 0.2, 0.39, 0.8, 0.1])
+    M = sp.csr_matrix((data, (rows, cols)), shape=(4, 4))
+
+    gc = EpsilonBallGraphConstructor(threshold=0.4, mode="distance")  # networkx out by default
+    G = gc.from_matrix(M)
+
+    assert isinstance(G, nx.Graph)
+    # Kept edges (after sym 'max'):
+    # (0,1): max(0.35, 0.2) = 0.35
+    assert G.has_edge(0, 1) and pytest.approx(G[0][1]["weight"]) == 0.35
+    # (2,3): max(0.39, 0.1) = 0.39
+    assert G.has_edge(2, 3) and pytest.approx(G[2][3]["weight"]) == 0.39
+    # Not present:
+    assert not G.has_edge(0, 2) and not G.has_edge(0, 3)
