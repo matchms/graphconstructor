@@ -1,13 +1,11 @@
-from dataclasses import dataclass
-from typing import Optional, Literal
 from abc import ABC, abstractmethod
-
+from dataclasses import dataclass
+from typing import Literal, Optional
 import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import spmatrix
-
-from ..types import MatrixMode, CSRMatrix
 from ..adapters import ANNInput
+from ..types import CSRMatrix, MatrixMode
 from ..utils import _make_symmetric_csr
 
 

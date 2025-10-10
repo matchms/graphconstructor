@@ -1,17 +1,15 @@
 from typing import Optional
-
 import numpy as np
+import scipy.sparse as sp
 from numpy.typing import NDArray
 from scipy.sparse import csr_matrix, spmatrix
-import scipy.sparse as sp
-
-from ..types import MatrixMode, CSRMatrix
-from . import BaseGraphConstructor, GraphConstructionConfig
+from ..types import CSRMatrix, MatrixMode
 from ..utils import (
+    _as_csr_square,
     _coerce_knn_inputs,
     _threshold_mask,
-    _as_csr_square,
 )
+from . import BaseGraphConstructor, GraphConstructionConfig
 
 
 class EpsilonBallGraphConstructor(BaseGraphConstructor):

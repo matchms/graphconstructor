@@ -1,16 +1,14 @@
 from typing import Optional
-
 import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import spmatrix
-
-from ..types import MatrixMode, CSRMatrix
-from . import BaseGraphConstructor, GraphConstructionConfig
+from ..types import CSRMatrix, MatrixMode
 from ..utils import (
     _coerce_knn_inputs,
     _csr_from_edges,
     _knn_from_matrix,
 )
+from . import BaseGraphConstructor, GraphConstructionConfig
 
 
 class KNNGraphConstructor(BaseGraphConstructor):
