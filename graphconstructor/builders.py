@@ -3,7 +3,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import csr_matrix
 
-from .core import (
+from .constructors import (
     GraphConstructionConfig,
     KNNGraphConstructor,
     EpsilonBallGraphConstructor,
