@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Literal, Protocol, Tuple, Optional
+from typing import Literal, Optional, Protocol, Tuple
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.sparse import csr_matrix

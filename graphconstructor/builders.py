@@ -1,14 +1,13 @@
 from typing import Optional
 from numpy.typing import NDArray
 from scipy.sparse import csr_matrix, spmatrix
-
+from .adapters import ANNInput
 from .constructors import (
+    EpsilonBallGraphConstructor,
     GraphConstructionConfig,
     KNNGraphConstructor,
-    EpsilonBallGraphConstructor,
 )
 from .types import MatrixMode
-from .adapters import ANNInput
 
 
 # ---------- Functional convenience API ----------

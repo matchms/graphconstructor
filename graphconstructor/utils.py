@@ -1,9 +1,8 @@
 from typing import Tuple
 import numpy as np
+import scipy.sparse as sp
 from numpy.typing import NDArray
 from scipy.sparse import csr_matrix, issparse, spmatrix
-import scipy.sparse as sp
-
 from .types import MatrixMode
 
 
