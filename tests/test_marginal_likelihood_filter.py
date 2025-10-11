@@ -123,11 +123,6 @@ def test_mlf_alpha_monotonicity():
 
 # ----------------- Weight casting behavior -----------------
 def test_mlf_weight_cast_round_vs_floor_changes_boundary():
-    """
-    Make a tiny undirected graph where an edge weight is 2.6; rounding -> 3, floor -> 2.
-    Since tail is P[σ >= w], 'round' is stricter than 'floor'.
-    """
-    # Star-ish: node 0 connected to 1 and 2; weights chosen to influence p-values.
     A = _csr(
         data=[2.6, 1.9],
         rows=[0, 0],
@@ -136,7 +131,7 @@ def test_mlf_weight_cast_round_vs_floor_changes_boundary():
     )
     G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
 
-    # Choose an alpha where the difference between ceil/rounding vs floor matters.
+    # Pick an alpha not too close to the boundary to avoid rounding ambiguity
     alpha = 0.2
 
     out_round = MarginalLikelihoodFilter(alpha=alpha, weight_cast="round").apply(G0)
@@ -145,9 +140,9 @@ def test_mlf_weight_cast_round_vs_floor_changes_boundary():
     kept_round = set(zip(*sp.triu(out_round.adj, k=1).nonzero()))
     kept_floor = set(zip(*sp.triu(out_floor.adj, k=1).nonzero()))
 
-    # With "floor", thresholds are easier to meet (w=2 vs w=3), so it should keep
-    # a superset of the edges kept by "round".
-    assert kept_round.issubset(kept_floor)
+    # Because we test the UPPER tail P(σ >= w), rounding up (larger w) produces
+    # smaller p-values → at least as many edges pass as with floor.
+    assert kept_floor.issubset(kept_round)
 
 
 # ----------------- Degenerate T = 0 case -----------------
