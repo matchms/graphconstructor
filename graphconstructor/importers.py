@@ -50,6 +50,7 @@ def from_ann(ann, query_data, k: int, *, store_weights=True, directed=False, met
 
 def from_pairwise(matrix, *, strategy: Tuple[str, float|int], mode: Mode,
                   directed=False, store_weights=True, meta=None, sym_op="max") -> Graph:
+    # TODO: maybe remove because redundant with operators workflow
     # strategy = ("knn", k) or ("epsilon", thresh)
     tag, param = strategy
     csr, _ = _as_csr_square(matrix)

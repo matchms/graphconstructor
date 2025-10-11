@@ -1,0 +1,172 @@
+from dataclasses import dataclass
+from typing import Literal
+import numpy as np
+import scipy.sparse as sp
+from scipy.stats import binom
+from ..graph import Graph
+from .base import GraphOperator
+
+
+WeightCast = Literal["round", "floor", "ceil", "none"]
+
+
+@dataclass(slots=True)
+class MarginalLikelihoodFilter(GraphOperator):
+    """
+    Marginal Likelihood Filter (MLF) as in:
+    Dianati, N. (2016). "Unwinding the hairball graph: Pruning algorithms for weighted complex networks."
+    Physical Review E 93, 012304.
+
+    Keeps edge (i,j) iff p-value s_ij(w_ij) = P[σ_ij >= w_ij | degrees, T] <= alpha,
+    under the null model that preserves node strengths on average.
+
+    - Undirected case:
+        p = (k_i * k_j) / (2 T^2),  where T = 0.5 * sum_i k_i   (strengths)
+    - Directed case:
+        p = (k_out_i * k_in_j) / (T^2),  where T = sum_i k_out_i
+
+    Parameters
+    ----------
+    alpha : float
+        Significance threshold. Keep edges with p-value <= alpha.
+    weight_cast : {"round","floor","ceil","none"}, default "round"
+        Edge weights are assumed to be (nonnegative) counts. If your Graph stores
+        floats, choose how to convert edge weights to integers for the binomial tail.
+        - "round": np.rint
+        - "floor": np.floor
+        - "ceil" : np.ceil
+        - "none" : require they are already integers (ValueError otherwise)
+    assume_loopless : bool, default False
+        If True, self-loops are excluded from testing. Your Graph already drops
+        self-loops by construction; this flag is here for clarity and future loopless
+        corrections. Currently it only ensures i != j in filtering.
+    copy_meta : bool, default True
+        If True, copies metadata frame; set to False to reuse reference.
+
+    Notes
+    -----
+    - Numerical tail computation uses scipy.stats.binom.sf(w-1, T, p), which equals
+      sum_{m >= w} C(T,m) p^m (1-p)^{T-m}.
+    - For very large T, this is still efficient and stable compared to naive summation.
+    - We only test existing edges (sparse support). No densification.
+    - Undirected graphs are treated on the UPPER TRIANGLE only and mirrored back.
+    """
+
+    alpha: float
+    weight_cast: WeightCast = "round"
+    assume_loopless: bool = False
+    copy_meta: bool = True
+
+    def _cast_weights_to_int(self, w: np.ndarray) -> np.ndarray:
+        if self.weight_cast == "round":
+            wi = np.rint(w)
+        elif self.weight_cast == "floor":
+            wi = np.floor(w)
+        elif self.weight_cast == "ceil":
+            wi = np.ceil(w)
+        elif self.weight_cast == "none":
+            # ensure already integers
+            if not np.allclose(w, np.rint(w)):
+                raise ValueError("Non-integer weights present but weight_cast='none'.")
+            wi = w
+        else:
+            raise ValueError("Invalid weight_cast option.")
+        wi = wi.clip(min=0).astype(np.int64, copy=False)
+        return wi
+
+    def _undirected_filter(self, G: Graph) -> Graph:
+        A = G.adj.tocsr(copy=False)
+
+        # strengths (row sums) — for symmetric undirected, row sum == strength
+        k = np.asarray(A.sum(axis=1)).ravel()
+        T = 0.5 * float(k.sum())  # total unit edges
+        if T <= 0:
+            # degenerate: no edges to keep
+            return Graph.from_csr(A.copy() * 0.0, directed=False, weighted=G.weighted,
+                                  meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta,
+                                  sym_op="max")
+
+        # Work on upper triangle to avoid double-testing undirected pairs
+        Au = sp.triu(A, k=1).tocoo()
+        if Au.nnz == 0:
+            return Graph.from_csr(A.copy() * 0.0, directed=False, weighted=G.weighted,
+                                  meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta,
+                                  sym_op="max")
+
+        # integerized realized weights
+        w = self._cast_weights_to_int(Au.data)
+
+        # p = k_i k_j / (2 T^2)
+        ki = k[Au.row]
+        kj = k[Au.col]
+        p = (ki * kj) / (2.0 * (T ** 2))
+        # clip to [0,1] numerically
+        p = np.clip(p, 0.0, 1.0)
+
+        # p-value s_ij(w_ij) = P[σ >= w_ij] = sf(w_ij - 1)
+        # sf expects n=T (integer) and k integer, but T can be large float -> cast
+        n = int(round(T))
+        # To be conservative if rounding T: we can keep T as integer rounding; T comes from counts anyway.
+        pvals = binom.sf(w - 1, n=n, p=p)
+
+        keep = pvals <= self.alpha
+
+        # Build filtered symmetric adjacency
+        rows = Au.row[keep]
+        cols = Au.col[keep]
+        data = Au.data[keep] if G.weighted else np.ones(keep.sum(), dtype=float)
+
+        # mirror to both (i,j) and (j,i)
+        rows_full = np.concatenate([rows, cols])
+        cols_full = np.concatenate([cols, rows])
+        data_full = np.concatenate([data, data])
+
+        A_f = sp.csr_matrix((data_full, (rows_full, cols_full)), shape=A.shape)
+        return Graph.from_csr(A_f, directed=False, weighted=G.weighted,
+                              meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta,
+                              sym_op="max")
+
+    def _directed_filter(self, G: Graph) -> Graph:
+        A = G.adj.tocsr(copy=False)
+
+        kout = np.asarray(A.sum(axis=1)).ravel()
+        kin = np.asarray(A.sum(axis=0)).ravel()
+        T = float(kout.sum())
+        if T <= 0:
+            return Graph.from_csr(A.copy() * 0.0, directed=True, weighted=G.weighted,
+                                  meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta)
+
+        coo = A.tocoo()
+        if coo.nnz == 0:
+            return Graph.from_csr(A.copy() * 0.0, directed=True, weighted=G.weighted,
+                                  meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta)
+
+        # Optionally exclude self-edges (usually none in your Graph)
+        if self.assume_loopless:
+            mask = coo.row != coo.col
+            coo = sp.coo_matrix((coo.data[mask], (coo.row[mask], coo.col[mask])), shape=A.shape)
+
+        w = self._cast_weights_to_int(coo.data)
+
+        pi = kout[coo.row]
+        pj = kin[coo.col]
+        p = (pi * pj) / (T ** 2)
+        p = np.clip(p, 0.0, 1.0)
+
+        n = int(round(T))
+        pvals = binom.sf(w - 1, n=n, p=p)
+        keep = pvals <= self.alpha
+
+        rows = coo.row[keep]
+        cols = coo.col[keep]
+        data = coo.data[keep] if G.weighted else np.ones(keep.sum(), dtype=float)
+
+        A_f = sp.csr_matrix((data, (rows, cols)), shape=A.shape)
+        return Graph.from_csr(A_f, directed=True, weighted=G.weighted,
+                              meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta)
+
+    def apply(self, G: Graph) -> Graph:
+        if G.directed:
+            return self._directed_filter(G)
+        else:
+            return self._undirected_filter(G)
