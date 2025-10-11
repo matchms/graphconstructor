@@ -50,7 +50,7 @@ pip install graphconstructor
 
 ```python
 import numpy as np
-from graphconstructor.importers import from_pairwise, from_knn, from_ann
+from graphconstructor.importers import from_dense  # many other options, e.g. from_knn, from_ann ...
 
 # Symmetric distance matrix (example)
 D = np.random.rand(100, 100) ** 0.5
