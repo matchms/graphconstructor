@@ -18,8 +18,7 @@ ruff-report.txt
 xunit-result.xml
 .scannerwork/
 
-docs/_build
-docs/apidocs
+paper/
 
 # ide
 .idea
