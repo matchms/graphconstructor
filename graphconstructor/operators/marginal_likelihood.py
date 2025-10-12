@@ -28,10 +28,10 @@ class MarginalLikelihoodFilter(GraphOperator):
     ----------
     alpha : float
         Significance threshold. Keep edges with p-value <= alpha.
-    float_scaling : float, default 100.0
+    float_scaling : float, default 20.0
         Edge weights are assumed to be (nonnegative) counts. If your Graph stores
         floats, then those will be converted by scaling and rounding to integers
-        between 0 and float_scaling. Default is 100.
+        between 0 and float_scaling. Default is 20.
     assume_loopless : bool, default False
         If True, self-loops are excluded from testing. Graph already drops
         self-loops by construction; this flag is here for clarity and future loopless
@@ -49,7 +49,7 @@ class MarginalLikelihoodFilter(GraphOperator):
     """
 
     alpha: float
-    float_scaling: float = 100
+    float_scaling: float = 20.
     assume_loopless: bool = False
     copy_meta: bool = True
 
@@ -59,7 +59,7 @@ class MarginalLikelihoodFilter(GraphOperator):
             # Already integers
             return np.rint(w).astype(np.int32, copy=False)
         elif max_weight is not None:
-            wi = np.floor(self.float_scaling * w)
+            wi = np.round(self.float_scaling * w)
         else:
             raise ValueError("Invalid float_scaling option.")
         return wi.clip(min=0).astype(np.int32, copy=False)
@@ -96,7 +96,7 @@ class MarginalLikelihoodFilter(GraphOperator):
         # p-value s_ij(w_ij) = P[σ >= w_ij] = sf(w_ij - 1)
         # sf expects n=T (integer) and k integer, but T can be large float -> cast
         n = int(round(T))
-        # To be conservative if rounding T: we can keep T as integer rounding; T comes from counts anyway.
+        # To be conservative if rounding T: we can keep <wT as integer rounding; T comes from counts anyway.
         pvals = binom.sf(w - 1, n=n, p=p)
 
         keep = pvals <= self.alpha
