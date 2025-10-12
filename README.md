@@ -38,6 +38,9 @@ Fast, NumPy/SciPy-centric tools to **build and refine large sparse graphs** from
   * `DisparityFilter(alpha=0.05, rule="or"|"and")`
     **Serrano–Boguñá–Vespignani** backbone for **continuous weights**. Tests each edge against a node-wise null (Dirichlet/Beta split of strength). Undirected edges can be kept if either (“or”, default) or both (“and”) endpoints deem them significant.  
     Ref: Serrano, Boguñá, Vespignani, "Extracting the multiscale backbone of complex weighted networks", PNAS 2009.
+  * `LocallyAdaptiveSparsification(alpha=0.05, rule="or"|"and")`
+    Implementation of the "Locally Adaptive Network Sparsification" (LANS) algorithm which does not assume any particular null model. Instead the distribution of similarity weights is used to determine and then retain statistically significant edges.  
+    Ref: Foti, Hughes, Rockmore, "Nonparametric Sparsification of Complex Multiscale Networks", 2011, https://doi.org/10.1371/journal.pone.0016431
   * `MarginalLikelihoodFilter(alpha, float_scaling=20, assume_loopless=False)`
     **Dianati’s MLF** for **integer weights**. Uses configuration-like binomial null preserving strengths on average; computes upper-tail p-values and keeps edges with ($p \le \alpha$). Supports float → integer casting strategies.  
     Ref: Dianati, "Unwinding the hairball graph: Pruning algorithms for weighted complex networks", Ref: Phys. Rev. E 2016, https://link.aps.org/doi/10.1103/PhysRevE.93.012304
