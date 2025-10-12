@@ -9,29 +9,44 @@ Fast, NumPy/SciPy-centric tools to **build and refine large sparse graphs** from
 
 ---
 
-## Features
+## Key elements of `graphconstructor`:
 
 * **Graph** class (`graphconstructor.graph.Graph`)
+  Central graph class in graphconstructor. The actual graph is stored as sparse adjecency matrix `graph.adj` and can represent a **directed** or **undirected** graph (both either as **weighted** or **unweighted** graph).
+  A `graph` object also contains node metadata at `graph.metadata` in form pf a pandas DataFrame.
 
-  * CSR adjacency, `directed` / `weighted` flags
-  * Node metadata as a `DataFrame` (optional `"name"` column)
   * Editing: `drop(...)`, `sorted_by(...)`
   * Exporters: `to_networkx()`, `to_igraph()`
 
 * **Importers** (`graphconstructor.importers`)
+  Functions to construct a first graph from various import formats. This is only meant as a first step in the full "graph construction" process and will usually be followed by one or multiple **operator steps**.
 
   * `from_csr`, `from_dense`
   * `from_knn(indices, distances, ...)`
   * `from_ann(ann, query_data, k, ...)` (supports cached neighbors or `.query`)
 
 * **Operators** (`graphconstructor.operators`)
+  The `operators` are the central algorithms for graph construction from similarity or distance metrics. Starting from a similarity or distance based graph with (usually) far too many edges for many purposes (e.g., further analysis or graph visualizatio), `graphconstructor` provides a range of different methods to sparsify the graph.
 
   * `KNNSelector(k, mutual=False, mutual_k=None, mode="distance"|"similarity")`
     Keep top-*k* neighbors per node; optionally require **mutual** edges using top-`mutual_k`.
   * `WeightThreshold(threshold, mode="distance"|"similarity")`
-    Keep edges with weight `< ε` (distance) or `> τ` (similarity).
+    Keep edges with weight `< threshold` (distance) or `> threshold` (similarity).
+  * `DoublyStochastic(tolerance=1e-5, max_iter=10000)`
+    **Sinkhorn–Knopp** alternating row/column normalization to make the adjacency (approximately) **doubly stochastic** without densifying (CSR-only). Useful as a normalization step before backboning/thresholding.  
+    Ref: Sinkhorn (1964); discussed in Coscia, "The Atlas for the Inspiring Network Scientist" (2025).
+  * `DisparityFilter(alpha=0.05, rule="or"|"and")`
+    **Serrano–Boguñá–Vespignani** backbone for **continuous weights**. Tests each edge against a node-wise null (Dirichlet/Beta split of strength). Undirected edges can be kept if either (“or”, default) or both (“and”) endpoints deem them significant.  
+    Ref: Serrano, Boguñá, Vespignani, "Extracting the multiscale backbone of complex weighted networks", PNAS 2009.
+  * `MarginalLikelihoodFilter(alpha, float_scaling=20, assume_loopless=False)`
+    **Dianati’s MLF** for **integer weights**. Uses configuration-like binomial null preserving strengths on average; computes upper-tail p-values and keeps edges with ($p \le \alpha$). Supports float → integer casting strategies.  
+    Ref: Dianati, "Unwinding the hairball graph: Pruning algorithms for weighted complex networks", Ref: Phys. Rev. E 2016, https://link.aps.org/doi/10.1103/PhysRevE.93.012304
+  * `NoiseCorrected(delta=1.64, derivative="constant"|"full")`
+    **Noise-Corrected (NC) backbone**. Computes symmetric lift relative to a pairwise null, estimates variance via a binomial model with **Beta** prior (Bayesian shrinkage), and keeps edges exceeding ( $\delta$ ) standard deviations. `derivative="full"` matches the paper’s delta-method including ($d\kappa/dn$); `"constant"` is a        simpler, fast variant.  
+    Ref: Coscia & Neffke, "Network Backboning with Noisy Data", 2017, https://ieeexplore.ieee.org/document/7929996
 
 Operators are **pure**: they take a `Graph`, return a new `Graph` (no densification).
+
 
 ---
 
