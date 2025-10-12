@@ -59,7 +59,7 @@ class Graph:
             A.data[:] = 1.0
         if not directed:
             A = cls._symmetrize(A, how=sym_op)
-        # drop self-loops by default (you can expose a flag if needed)
+        # drop self-loops by default (TODO: maybe add flag later?)
         if A.diagonal().any():
             A = A.tolil(copy=False)
             A.setdiag(0)

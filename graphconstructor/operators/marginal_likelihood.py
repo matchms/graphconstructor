@@ -37,7 +37,7 @@ class MarginalLikelihoodFilter(GraphOperator):
         - "ceil" : np.ceil
         - "none" : require they are already integers (ValueError otherwise)
     assume_loopless : bool, default False
-        If True, self-loops are excluded from testing. Your Graph already drops
+        If True, self-loops are excluded from testing. Graph already drops
         self-loops by construction; this flag is here for clarity and future loopless
         corrections. Currently it only ensures i != j in filtering.
     copy_meta : bool, default True
@@ -141,7 +141,7 @@ class MarginalLikelihoodFilter(GraphOperator):
             return Graph.from_csr(A.copy() * 0.0, directed=True, weighted=G.weighted,
                                   meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta)
 
-        # Optionally exclude self-edges (usually none in your Graph)
+        # Optionally exclude self-edges (currently Graph anyway drops them)
         if self.assume_loopless:
             mask = coo.row != coo.col
             coo = sp.coo_matrix((coo.data[mask], (coo.row[mask], coo.col[mask])), shape=A.shape)
