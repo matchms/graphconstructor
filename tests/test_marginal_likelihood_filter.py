@@ -36,7 +36,7 @@ def test_mlf_undirected_matches_binomial_tail():
 
     # Upper triangle COO to compute p-values for each undirected edge once
     Au = sp.triu(A_sym, k=1).tocoo()
-    w = np.rint(Au.data).astype(int)  # operator default weight_cast="round"
+    w = np.rint(Au.data).astype(int)
     ki = k[Au.row]
     kj = k[Au.col]
     p = (ki * kj) / (2.0 * (T ** 2))
@@ -49,7 +49,7 @@ def test_mlf_undirected_matches_binomial_tail():
     expected_edges = set(zip(Au.row[keep].tolist(), Au.col[keep].tolist()))
 
     # Run operator
-    out = MarginalLikelihoodFilter(alpha=alpha, weight_cast="round").apply(G0)
+    out = MarginalLikelihoodFilter(alpha=alpha).apply(G0)
     A2 = out.adj
     # Extract kept undirected edges from result (upper triangle)
     kept_u = sp.triu(A2, k=1).tocoo()
@@ -121,30 +121,6 @@ def test_mlf_alpha_monotonicity():
     assert e_small.issubset(e_large)
 
 
-# ----------------- Weight casting behavior -----------------
-def test_mlf_weight_cast_round_vs_floor_changes_boundary():
-    A = _csr(
-        data=[2.6, 1.9],
-        rows=[0, 0],
-        cols=[1, 2],
-        n=3,
-    )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
-
-    # Pick an alpha not too close to the boundary to avoid rounding ambiguity
-    alpha = 0.2
-
-    out_round = MarginalLikelihoodFilter(alpha=alpha, weight_cast="round").apply(G0)
-    out_floor = MarginalLikelihoodFilter(alpha=alpha, weight_cast="floor").apply(G0)
-
-    kept_round = set(zip(*sp.triu(out_round.adj, k=1).nonzero()))
-    kept_floor = set(zip(*sp.triu(out_floor.adj, k=1).nonzero()))
-
-    # Because we test the UPPER tail P(σ >= w), rounding up (larger w) produces
-    # smaller p-values → at least as many edges pass as with floor.
-    assert kept_floor.issubset(kept_round)
-
-
 # ----------------- Degenerate T = 0 case -----------------
 def test_mlf_handles_no_edges_T_zero():
     A = sp.csr_matrix((3, 3), dtype=float)  # all zeros
@@ -160,7 +136,7 @@ def test_mlf_preserves_flags_and_copies_metadata_when_requested():
     A = _csr([1, 2], [0, 1], [1, 2], 3)
     G0 = Graph.from_csr(A, directed=False, weighted=True, meta=meta)
 
-    op = MarginalLikelihoodFilter(alpha=0.5, weight_cast="round", copy_meta=True)
+    op = MarginalLikelihoodFilter(alpha=0.5, copy_meta=True)
     out = op.apply(G0)
 
     # Flags preserved

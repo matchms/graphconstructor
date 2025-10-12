@@ -1,13 +1,9 @@
 from dataclasses import dataclass
-from typing import Literal
 import numpy as np
 import scipy.sparse as sp
 from scipy.stats import binom
 from ..graph import Graph
 from .base import GraphOperator
-
-
-WeightCast = Literal["round", "floor", "ceil", "none"]
 
 
 @dataclass(slots=True)
@@ -20,6 +16,9 @@ class MarginalLikelihoodFilter(GraphOperator):
     Keeps edge (i,j) iff p-value s_ij(w_ij) = P[σ_ij >= w_ij | degrees, T] <= alpha,
     under the null model that preserves node strengths on average.
 
+    The original algorithm assumes integer weights (counts). If your graph has
+    float weights, those are converted to integers by scaling and rounding.
+
     - Undirected case:
         p = (k_i * k_j) / (2 T^2),  where T = 0.5 * sum_i k_i   (strengths)
     - Directed case:
@@ -29,13 +28,10 @@ class MarginalLikelihoodFilter(GraphOperator):
     ----------
     alpha : float
         Significance threshold. Keep edges with p-value <= alpha.
-    weight_cast : {"round","floor","ceil","none"}, default "round"
+    float_scaling : float, default 100.0
         Edge weights are assumed to be (nonnegative) counts. If your Graph stores
-        floats, choose how to convert edge weights to integers for the binomial tail.
-        - "round": np.rint
-        - "floor": np.floor
-        - "ceil" : np.ceil
-        - "none" : require they are already integers (ValueError otherwise)
+        floats, then those will be converted by scaling and rounding to integers
+        between 0 and float_scaling. Default is 100.
     assume_loopless : bool, default False
         If True, self-loops are excluded from testing. Graph already drops
         self-loops by construction; this flag is here for clarity and future loopless
@@ -53,26 +49,20 @@ class MarginalLikelihoodFilter(GraphOperator):
     """
 
     alpha: float
-    weight_cast: WeightCast = "round"
+    float_scaling: float = 100
     assume_loopless: bool = False
     copy_meta: bool = True
 
-    def _cast_weights_to_int(self, w: np.ndarray) -> np.ndarray:
-        if self.weight_cast == "round":
-            wi = np.rint(w)
-        elif self.weight_cast == "floor":
-            wi = np.floor(w)
-        elif self.weight_cast == "ceil":
-            wi = np.ceil(w)
-        elif self.weight_cast == "none":
-            # ensure already integers
-            if not np.allclose(w, np.rint(w)):
-                raise ValueError("Non-integer weights present but weight_cast='none'.")
-            wi = w
+    def _cast_weights_to_int(self, w: np.ndarray, max_weight=None) -> np.ndarray:
+        """Map floats to integers by scaling and rounding."""
+        if np.allclose(w, np.rint(w)):
+            # Already integers
+            return np.rint(w).astype(np.int32, copy=False)
+        elif max_weight is not None:
+            wi = np.floor(self.float_scaling * w)
         else:
-            raise ValueError("Invalid weight_cast option.")
-        wi = wi.clip(min=0).astype(np.int64, copy=False)
-        return wi
+            raise ValueError("Invalid float_scaling option.")
+        return wi.clip(min=0).astype(np.int32, copy=False)
 
     def _undirected_filter(self, G: Graph) -> Graph:
         A = G.adj.tocsr(copy=False)
@@ -94,7 +84,7 @@ class MarginalLikelihoodFilter(GraphOperator):
                                   sym_op="max")
 
         # integerized realized weights
-        w = self._cast_weights_to_int(Au.data)
+        w = self._cast_weights_to_int(Au.data, max_weight=Au.data.max())
 
         # p = k_i k_j / (2 T^2)
         ki = k[Au.row]
@@ -146,7 +136,7 @@ class MarginalLikelihoodFilter(GraphOperator):
             mask = coo.row != coo.col
             coo = sp.coo_matrix((coo.data[mask], (coo.row[mask], coo.col[mask])), shape=A.shape)
 
-        w = self._cast_weights_to_int(coo.data)
+        w = self._cast_weights_to_int(coo.data, max_weight=coo.data.max())
 
         pi = kout[coo.row]
         pj = kin[coo.col]
