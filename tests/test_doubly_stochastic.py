@@ -26,7 +26,7 @@ def test_doubly_stochastic_converges_on_positive_dense():
     np.fill_diagonal(M, 0.0)
 
     G0 = Graph.from_dense(M, directed=False, weighted=True, sym_op="max")
-    op = DoublyStochastic(epsilon=1e-6, tol=1e-12, max_iter=20_000)
+    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
 
     A = G.adj
@@ -54,7 +54,7 @@ def test_doubly_stochastic_sparse_with_isolates():
     )
     G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
 
-    op = DoublyStochastic(epsilon=1e-6, tol=1e-12, max_iter=20_000)
+    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
     A2 = G.adj
 
@@ -93,7 +93,7 @@ def test_doubly_stochastic_directed_graph_unsolvable():
     )
     G0 = Graph.from_csr(A, directed=True, weighted=True)
 
-    op = DoublyStochastic(epsilon=1e-6, tol=1e-12, max_iter=10_000)
+    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
     A2 = G.adj
 
@@ -141,7 +141,7 @@ def test_doubly_stochastic_preserves_flags_and_copies_metadata():
     A = _csr([0.4, 0.6, 0.3], [0, 1, 2], [1, 2, 0], 3)
     G0 = Graph.from_csr(A, directed=False, weighted=True, meta=meta, sym_op="max")
 
-    op = DoublyStochastic(epsilon=1e-6, tol=1e-12, max_iter=20_000, copy_meta=True)
+    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000, copy_meta=True)
     G = op.apply(G0)
 
     # Flags

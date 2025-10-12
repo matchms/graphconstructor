@@ -22,20 +22,17 @@ class DoublyStochastic(GraphOperator):
 
     Parameters
     ----------
-    epsilon : float
+    tolerance : float
         Band tolerance for the "both sums ~ 1" check, i.e. accept if each row/col
-        sum is in [1 - ε, 1 + ε]. Default 1e-5.
+        sum is in [1 - tolerance, 1 + tolerance]. Default 1e-5.
     max_iter : int
         Maximum iterations. Default 10_000.
-    tol : float
-        Absolute tolerance on row/col sums as a fallback (inf-norm to 1). Default 1e-9.
     copy_meta : bool
         Copy metadata frame if present. Default True.
     """
 
-    epsilon: float = 1e-5
+    tolerance: float = 1e-5
     max_iter: int = 10_000
-    tol: float = 1e-9
     copy_meta: bool = True
 
     def apply(self, G: Graph) -> Graph:
@@ -67,8 +64,8 @@ class DoublyStochastic(GraphOperator):
         # The csc conversions above could be heavy; build once
         A_T = A.T.tocsr(copy=False)
 
-        min_thres = 1.0 - self.tol
-        max_thres = 1.0 + self.tol
+        min_thres = 1.0 - self.tolerance
+        max_thres = 1.0 + self.tolerance
 
         # Parameter for stabilitation
         MAX_FACTOR = 1e50
@@ -97,13 +94,6 @@ class DoublyStochastic(GraphOperator):
                 cols_ok = True
 
             if rows_ok and cols_ok:
-                break
-
-            # Fallback absolute norm (helps when close to limit)
-            if max(
-                (np.max(np.abs(row_sums[row_has_edges] - 1.0)) if row_has_edges.any() else 0.0),
-                (np.max(np.abs(col_sums[col_has_edges] - 1.0)) if col_has_edges.any() else 0.0),
-            ) <= self.tol:
                 break
 
         # Apply scaling once: A' = diag(r) * A * diag(c)  (CSR-friendly)
