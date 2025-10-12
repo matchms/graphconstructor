@@ -1,8 +1,8 @@
-from typing import Literal, Tuple
+from typing import Literal
 import numpy as np
 import scipy.sparse as sp
 from .graph import Graph
-from .utils import _as_csr_square, _coerce_knn_inputs, _knn_from_matrix
+from .utils import _coerce_knn_inputs
 
 
 Mode = Literal["distance", "similarity"]
@@ -46,30 +46,6 @@ def from_ann(ann, query_data, k: int, *, store_weights=True, directed=False, met
             raise TypeError("from_ann requires query_data when index has no cached neighbors.")
         ind, dist = idx.query(query_data, k=k)
     return from_knn(ind, dist, store_weights=store_weights, directed=directed, meta=meta, sym_op=sym_op)
-
-
-def from_pairwise(matrix, *, strategy: Tuple[str, float|int], mode: Mode,
-                  directed=False, store_weights=True, meta=None, sym_op="max") -> Graph:
-    # TODO: maybe remove because redundant with operators workflow
-    # strategy = ("knn", k) or ("epsilon", thresh)
-    tag, param = strategy
-    csr, _ = _as_csr_square(matrix)
-    if tag == "knn":
-        k = int(param)
-        ind, val = _knn_from_matrix(csr, k, mode=mode)
-        return from_knn(ind, val, store_weights=store_weights, directed=directed, meta=meta, sym_op=sym_op)
-    elif tag == "epsilon":
-        thresh = float(param)
-        data = csr.data
-        keep = (data < thresh) if mode == "distance" else (data > thresh)
-        coo = csr.tocoo()
-        rows, cols, w = coo.row[keep], coo.col[keep], coo.data[keep]
-        if not store_weights:
-            w = np.ones_like(w, dtype=float)
-        A = sp.csr_matrix((w, (rows, cols)), shape=csr.shape)
-        return Graph.from_csr(A, directed=directed, weighted=store_weights, meta=meta, sym_op=sym_op)
-    else:
-        raise ValueError("strategy must be ('knn', k) or ('epsilon', threshold)")
 
 
 # helper functions ---------------------------------------------

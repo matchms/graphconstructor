@@ -6,7 +6,6 @@ from graphconstructor.importers import (
     from_csr,
     from_dense,
     from_knn,
-    from_pairwise,
 )
 
 
@@ -88,35 +87,6 @@ def test_from_ann_queries_index_when_no_cache():
     assert G.adj.shape == (3, 3)
     # structure sanity: at least some edges present
     assert G.adj.nnz > 0
-
-
-# ----------------- from_pairwise -----------------
-def test_from_pairwise_knn_strategy_distance_mode():
-    # Small distance matrix; k=1 keeps the smallest off-diagonal per row
-    D = np.array([
-        [0.0, 0.2, 0.8, 0.3],
-        [0.2, 0.0, 0.6, 0.4],
-        [0.8, 0.6, 0.0, 0.5],
-        [0.3, 0.4, 0.5, 0.0],
-    ])
-    G = from_pairwise(D, strategy=("knn", 1), mode="distance", directed=False, store_weights=True)
-    # After sym 'max' on a symmetric input, weights match the distances
-    assert pytest.approx(G.adj[0, 1]) == 0.2
-    assert pytest.approx(G.adj[0, 3]) == 0.3
-
-
-def test_from_pairwise_epsilon_strategy_similarity_mode_and_store_weights_false():
-    S = np.array([
-        [1.0, 0.8, 0.6],
-        [0.7, 1.0, 0.9],
-        [0.4, 0.85, 1.0],
-    ])
-    G = from_pairwise(S, strategy=("epsilon", 0.75), mode="similarity",
-                      directed=False, store_weights=False)
-    # edges above 0.75 kept with unit weights; sym 'max' mirrors presence
-    assert G.adj[0, 1] == 1.0
-    assert G.adj[1, 2] == 1.0
-    assert G.adj[0, 2] == 0.0
 
 
 # ----------------- flags and metadata passthrough -----------------

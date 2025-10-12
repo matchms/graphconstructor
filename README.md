@@ -23,7 +23,6 @@ Fast, NumPy/SciPy-centric tools to **build and refine large sparse graphs** from
   * `from_csr`, `from_dense`
   * `from_knn(indices, distances, ...)`
   * `from_ann(ann, query_data, k, ...)` (supports cached neighbors or `.query`)
-  * `from_pairwise(matrix, strategy=("knn", k) | ("epsilon", thresh), mode=...)`
 
 * **Operators** (`graphconstructor.operators`)
 
@@ -50,7 +49,7 @@ pip install graphconstructor
 
 ```python
 import numpy as np
-from graphconstructor.importers import from_dense  # many other options, e.g. from_knn, from_ann ...
+from graphconstructor.importers import from_dense  # or use other options, e.g. from_knn, from_ann
 
 # Symmetric distance matrix (example)
 D = np.random.rand(100, 100) ** 0.5
@@ -69,7 +68,7 @@ from graphconstructor.operators import KNNSelector, WeightThreshold
 # Keep only the top-10 mutual neighbors (mutuality checked within top-20)
 G_refined = KNNSelector(k=5, mutual=True, mutual_k=20, mode="distance").apply(G0)
 
-# Prune weak edges (keep distancey < 0.3)
+# Prune weak edges (keep distance < 0.3)
 G_pruned = WeightThreshold(threshold=0.3, mode="distance").apply(G_refined)
 ```
 
