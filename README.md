@@ -12,7 +12,7 @@ This will usually be followed by a custom combination of one or multiple **opera
 
 ## Key elements of `graphconstructor`:
 
-* **Graph** class (`graphconstructor.graph.Graph`)
+* **Graph** class (`graphconstructor.Graph`)
   Central graph class in graphconstructor. The actual graph is stored as a sparse adjacency matrix `graph.adj` and can represent a **directed** or **undirected** graph (either as a **weighted** or **unweighted** graph).
   A `graph` object also contains node metadata at `graph.metadata` in the form of a pandas DataFrame.
 
@@ -20,14 +20,17 @@ This will usually be followed by a custom combination of one or multiple **opera
   * Exporters: `to_networkx()`, `to_igraph()`
 
 * **Importers** (`graphconstructor.importers`)
-  Functions to construct a first graph from various import formats. This is only meant as a first step in the full "graph construction" process and will usually be followed by one or multiple **operator steps**.
+  Functions to construct a first graph from various import formats. This is only meant as a first step in the full "graph construction" process and will usually be followed by one or multiple **operator steps**.  
+  All importers will return a `graphconstructor.Graph` object.
 
   * `from_csr`, `from_dense`
   * `from_knn(indices, distances, ...)`
   * `from_ann(ann, query_data, k, ...)` (supports cached neighbors or `.query`)
 
 * **Operators** (`graphconstructor.operators`)
-  The `operators` are the central algorithms for graph construction from similarity or distance metrics. Starting from a similarity or distance-based graph with (usually) far too many edges for many purposes (e.g., further analysis or graph visualization), `graphconstructor` provides a range of different methods to sparsify the graph.
+  The `operators` are the central algorithms for graph construction from similarity or distance metrics.
+  Starting from a similarity or distance-based graph with (usually) far too many edges for many purposes (e.g., further analysis or graph visualization), `graphconstructor` provides a range of different methods to sparsify the graph.  
+  All operators will take a `graphconstructor.Graph` object as input (as well as optional parameters) and will then also return a (modified) `graphconstructor.Graph` object.
 
   * `KNNSelector(k, mutual=False, mutual_k=None, mode="distance"|"similarity")`  
     **k-Nearest Neighrbor (KNN)** based edge selections. This will keep only top-*k* neighbors per node. Optionally, it requires **mutual** edges using top-`mutual_k`.
@@ -48,9 +51,6 @@ This will usually be followed by a custom combination of one or multiple **opera
   * `NoiseCorrected(delta=1.64, derivative="constant"|"full")`  
     **Noise-Corrected (NC) backbone**. Computes symmetric lift relative to a pairwise null, estimates variance via a binomial model with **Beta** prior (Bayesian shrinkage), and keeps edges exceeding ( $\delta$ ) standard deviations. `derivative="full"` matches the paper’s delta-method including ($d\kappa/dn$); `"constant"` is a        simpler, fast variant.  
     Ref: Coscia & Neffke, "Network Backboning with Noisy Data", 2017, https://ieeexplore.ieee.org/document/7929996
-
-Operators are **pure**: they take a `Graph`, return a new `Graph` (no densification).
-
 
 ---
 
