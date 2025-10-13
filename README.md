@@ -1,5 +1,6 @@
-# graphconstructor
+<img src="/docs/graphconstructor_logo.png" alt="Alt Text" width="600">
 
+# graphconstructor
 Fast, NumPy/SciPy-centric tools to **build and refine large sparse graphs from distances/similarities**.
 Use one of the provided **importers** to *get* a first graph from a distance/similarity array, kNN results, or ANN indices.
 This will usually be followed by a custom combination of one or multiple **operators** that will transform the graph, typically in the form of *sparsification* (also termed *backboning* or *pruning*).
