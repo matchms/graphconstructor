@@ -1,4 +1,3 @@
-from typing import Dict, Hashable, Iterable, Optional, Tuple
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
@@ -7,7 +6,13 @@ from matplotlib.patches import Patch
 from graphconstructor import Graph
 
 
-def plot_graph_by_class(G, class_attr: str = None, pos=None, cmap_name="tab20", default_color="#D3D3D3", with_labels=True):
+def plot_graph_by_class(
+        G: Graph,
+        class_attr: str = None,
+        pos=None,
+        cmap_name: str = "tab20",
+        default_color="teal",
+        with_labels: bool = True):
     """
     Color nodes by the categorical attribute stored on each node (e.g., node['cf_class']).
 
@@ -45,7 +50,7 @@ def plot_graph_by_class(G, class_attr: str = None, pos=None, cmap_name="tab20", 
     
         node_colors = [class_to_color.get(c, default_color) for c in node_classes]
     else:
-        node_colors = "teal"
+        node_colors = default_color
         unique_classes = False
     
     if G.weighted:
@@ -73,7 +78,6 @@ def plot_graph_by_class(G, class_attr: str = None, pos=None, cmap_name="tab20", 
         with_labels=with_labels,
         node_color=node_colors,
         node_size=node_sizes,
-        #edge_color="gray" if not G.weighted else "black",
         edge_color="gray" if not G.weighted else [cm.gray(w/max(edge_weights)) for w in edge_weights],
         width=1.0 if not G.weighted else edge_widths,
         alpha=0.85,
