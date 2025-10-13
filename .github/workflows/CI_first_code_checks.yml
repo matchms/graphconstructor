@@ -19,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.13'
       - name: Python info
         run: |
           which python
@@ -37,4 +37,4 @@ jobs:
       - name: Correct coverage paths
         run: sed -i "s+$PWD/++g" coverage.xml
       - name: Run ruff linter
-        run: ruff check --output-format=github
+        run: poetry run ruff check --output-format=github
