@@ -12,8 +12,8 @@ Fast, NumPy/SciPy-centric tools to **build and refine large sparse graphs** from
 ## Key elements of `graphconstructor`:
 
 * **Graph** class (`graphconstructor.graph.Graph`)
-  Central graph class in graphconstructor. The actual graph is stored as sparse adjecency matrix `graph.adj` and can represent a **directed** or **undirected** graph (both either as **weighted** or **unweighted** graph).
-  A `graph` object also contains node metadata at `graph.metadata` in form pf a pandas DataFrame.
+  Central graph class in graphconstructor. The actual graph is stored as a sparse adjacency matrix `graph.adj` and can represent a **directed** or **undirected** graph (either as a **weighted** or **unweighted** graph).
+  A `graph` object also contains node metadata at `graph.metadata` in the form of a pandas DataFrame.
 
   * Editing: `drop(...)`, `sorted_by(...)`
   * Exporters: `to_networkx()`, `to_igraph()`
@@ -26,25 +26,25 @@ Fast, NumPy/SciPy-centric tools to **build and refine large sparse graphs** from
   * `from_ann(ann, query_data, k, ...)` (supports cached neighbors or `.query`)
 
 * **Operators** (`graphconstructor.operators`)
-  The `operators` are the central algorithms for graph construction from similarity or distance metrics. Starting from a similarity or distance based graph with (usually) far too many edges for many purposes (e.g., further analysis or graph visualizatio), `graphconstructor` provides a range of different methods to sparsify the graph.
+  The `operators` are the central algorithms for graph construction from similarity or distance metrics. Starting from a similarity or distance-based graph with (usually) far too many edges for many purposes (e.g., further analysis or graph visualization), `graphconstructor` provides a range of different methods to sparsify the graph.
 
-  * `KNNSelector(k, mutual=False, mutual_k=None, mode="distance"|"similarity")`
-    Keep top-*k* neighbors per node; optionally require **mutual** edges using top-`mutual_k`.
-  * `WeightThreshold(threshold, mode="distance"|"similarity")`
-    Keep edges with weight `< threshold` (distance) or `> threshold` (similarity).
-  * `DoublyStochastic(tolerance=1e-5, max_iter=10000)`
+  * `KNNSelector(k, mutual=False, mutual_k=None, mode="distance"|"similarity")`  
+    **k-Nearest Neighrbor (KNN)** based edge selections. This will keep only top-*k* neighbors per node. Optionally, it requires **mutual** edges using top-`mutual_k`.
+  * `WeightThreshold(threshold, mode="distance"|"similarity")`  
+    Basic (or "naive") sparsification algorithm that simply applies a **global weight threshold**. Only edges with weight `< threshold` (distance) or `> threshold` (similarity) will be kept.
+  * `DoublyStochastic(tolerance=1e-5, max_iter=10000)`  
     **Sinkhorn–Knopp** alternating row/column normalization to make the adjacency (approximately) **doubly stochastic** without densifying (CSR-only). Useful as a normalization step before backboning/thresholding.  
     Ref: Sinkhorn (1964); discussed in Coscia, "The Atlas for the Inspiring Network Scientist" (2025).
-  * `DisparityFilter(alpha=0.05, rule="or"|"and")`
-    **Serrano–Boguñá–Vespignani** backbone for **continuous weights**. Tests each edge against a node-wise null (Dirichlet/Beta split of strength). Undirected edges can be kept if either (“or”, default) or both (“and”) endpoints deem them significant.  
+  * `DisparityFilter(alpha=0.05, rule="or"|"and")`  
+    **Disparity Filter** algorithm for graphs with continuous weights. Tests each edge against a node-wise null (Dirichlet/Beta split of strength). Undirected edges can be kept if either (“or”, default) or both (“and”) endpoints deem them significant.  
     Ref: Serrano, Boguñá, Vespignani, "Extracting the multiscale backbone of complex weighted networks", PNAS 2009.
-  * `LocallyAdaptiveSparsification(alpha=0.05, rule="or"|"and")`
-    Implementation of the "Locally Adaptive Network Sparsification" (LANS) algorithm which does not assume any particular null model. Instead the distribution of similarity weights is used to determine and then retain statistically significant edges.  
+  * `LocallyAdaptiveSparsification(alpha=0.05, rule="or"|"and")`  
+    Implementation of the **Locally Adaptive Network Sparsification (LANS)** algorithm, which does not assume any particular null model. Instead, the distribution of similarity weights is used to determine and then retain statistically significant edges.  
     Ref: Foti, Hughes, Rockmore, "Nonparametric Sparsification of Complex Multiscale Networks", 2011, https://doi.org/10.1371/journal.pone.0016431
-  * `MarginalLikelihoodFilter(alpha, float_scaling=20, assume_loopless=False)`
-    **Dianati’s MLF** for **integer weights**. Uses configuration-like binomial null preserving strengths on average; computes upper-tail p-values and keeps edges with ($p \le \alpha$). Supports float → integer casting strategies.  
+  * `MarginalLikelihoodFilter(alpha, float_scaling=20, assume_loopless=False)`  
+    Dianati’s **Marginal Likelihood Filter (MLF)** for integer weights. Uses configuration-like binomial null preserving strengths on average; computes upper-tail p-values and keeps edges with ($p \le \alpha$). Supports float → integer casting strategies.  
     Ref: Dianati, "Unwinding the hairball graph: Pruning algorithms for weighted complex networks", Ref: Phys. Rev. E 2016, https://link.aps.org/doi/10.1103/PhysRevE.93.012304
-  * `NoiseCorrected(delta=1.64, derivative="constant"|"full")`
+  * `NoiseCorrected(delta=1.64, derivative="constant"|"full")`  
     **Noise-Corrected (NC) backbone**. Computes symmetric lift relative to a pairwise null, estimates variance via a binomial model with **Beta** prior (Bayesian shrinkage), and keeps edges exceeding ( $\delta$ ) standard deviations. `derivative="full"` matches the paper’s delta-method including ($d\kappa/dn$); `"constant"` is a        simpler, fast variant.  
     Ref: Coscia & Neffke, "Network Backboning with Noisy Data", 2017, https://ieeexplore.ieee.org/document/7929996
 
