@@ -37,7 +37,7 @@ This will usually be followed by a custom combination of one or multiple **opera
   * `WeightThreshold(threshold, mode="distance"|"similarity")`  
     Basic (or "naive") sparsification algorithm that simply applies a **global weight threshold**. Only edges with weight `< threshold` (distance) or `> threshold` (similarity) will be kept.
   * `DoublyStochastic(tolerance=1e-5, max_iter=10000)`  
-    **Sinkhorn–Knopp** alternating row/column normalization to make the adjacency (approximately) **doubly stochastic** without densifying (CSR-only). Useful as a normalization step before backboning/thresholding.  
+    **Sinkhorn–Knopp** alternating row/column normalization to make the adjacency (approximately) **doubly stochastic** without densifying (CSR-only). Can be useful as a normalization step before backboning/thresholding.  
     Ref: Sinkhorn (1964); discussed in Coscia, "The Atlas for the Inspiring Network Scientist" (2025).
   * `DisparityFilter(alpha=0.05, rule="or"|"and")`  
     **Disparity Filter** algorithm for graphs with continuous weights. Tests each edge against a node-wise null (Dirichlet/Beta split of strength). Undirected edges can be kept if either (“or”, default) or both (“and”) endpoints deem them significant.  
@@ -47,7 +47,7 @@ This will usually be followed by a custom combination of one or multiple **opera
     Ref: Foti, Hughes, Rockmore, "Nonparametric Sparsification of Complex Multiscale Networks", 2011, https://doi.org/10.1371/journal.pone.0016431
   * `MarginalLikelihoodFilter(alpha, float_scaling=20, assume_loopless=False)`  
     Dianati’s **Marginal Likelihood Filter (MLF)** for integer weights. Uses configuration-like binomial null preserving strengths on average; computes upper-tail p-values and keeps edges with ($p \le \alpha$). Supports float → integer casting strategies.  
-    Ref: Dianati, "Unwinding the hairball graph: Pruning algorithms for weighted complex networks", Ref: Phys. Rev. E 2016, https://link.aps.org/doi/10.1103/PhysRevE.93.012304
+    Ref: Dianati, "Unwinding the hairball graph: Pruning algorithms for weighted complex networks", Phys. Rev. E 2016, https://link.aps.org/doi/10.1103/PhysRevE.93.012304
   * `NoiseCorrected(delta=1.64, derivative="constant"|"full")`  
     **Noise-Corrected (NC) backbone**. Computes symmetric lift relative to a pairwise null, estimates variance via a binomial model with **Beta** prior (Bayesian shrinkage), and keeps edges exceeding ( $\delta$ ) standard deviations. `derivative="full"` matches the paper’s delta-method including ($d\kappa/dn$); `"constant"` is a        simpler, fast variant.  
     Ref: Coscia & Neffke, "Network Backboning with Noisy Data", 2017, https://ieeexplore.ieee.org/document/7929996
