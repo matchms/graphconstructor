@@ -1,6 +1,6 @@
 from .graph import Graph
-from .pipeline import Pipeline
 from .importers import from_ann, from_csr, from_dense, from_knn
+from .pipeline import Pipeline
 from .types import CSRMatrix, MatrixMode
 
 

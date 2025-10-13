@@ -2,9 +2,8 @@ from dataclasses import dataclass
 from typing import Optional
 import numpy as np
 from numpy.typing import NDArray
-
 from .types import MatrixMode
-from .utils import _validate_square_matrix, _to_numpy
+from .utils import _to_numpy, _validate_square_matrix
 
 
 @dataclass

@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import Iterable, Literal, Sequence
-
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
+
 
 SymOp = Literal["max", "min", "average"]
 
@@ -104,7 +104,8 @@ class Graph:
 
         if weights is None:
             data = np.ones_like(rows, dtype=float)
-            weighted_eff = False if not weighted else False if weights is None else True  # edges w/o weights → unweighted
+            # edges w/o weights → unweighted
+            weighted_eff = False if not weighted else False if weights is None else True
         else:
             data = np.asarray(weights, dtype=float)
             if data.shape[0] != rows.shape[0]:
