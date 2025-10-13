@@ -1,11 +1,12 @@
 # graphconstructor
 
-Fast, NumPy/SciPy-centric tools to **build and refine large sparse graphs** from distances/similarities, kNN results, or ANN indices — without paying the conversion tax of pure-Python graph libraries.
+Fast, NumPy/SciPy-centric tools to **build and refine large sparse graphs from distances/similarities**.
+Use one of the provided **importers** to *get* a first graph from a distance/similarity array, kNN results, or ANN indices.
+This will usually be followed by a custom combination of one or multiple **operators** that will transform the graph, typically in the form of *sparsification* (also termed *backboning* or *pruning*).
 
-* Core storage: **SciPy CSR** adjacency
-* Node attributes: **pandas.DataFrame** (one row per node)
-* Clean separation of **importers** (how you *get* a graph) and **operators** (how you *transform* it)
+`graphconstructor` further provides
 * Optional exporters to **NetworkX** / **python-igraph** for using their powerful graph analysis and layouting methods!
+* Very basic graph visualizations (for more fancy options --> export the graph and use one of the available tools for graph visualization such as [Gephi](https://gephi.org/), [Cytoscape](https://cytoscape.org/), or others.
 
 ---
 
