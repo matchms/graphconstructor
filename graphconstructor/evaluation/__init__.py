@@ -1,6 +1,6 @@
 from .sparsity_sweeper import SparsitySweeper
 
 
-all = [
+__all__ = [
     "SparsitySweeper"
 ]
