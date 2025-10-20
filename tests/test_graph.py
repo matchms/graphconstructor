@@ -122,6 +122,53 @@ def test_sorted_by_permuted_order():
     # adjacency must be permuted consistently
     assert G2.adj.shape == (3, 3)
 
+# ----------------- utilities -----------------
+def test_graph_is_connected_method():
+    # Connected undirected graph
+    A1 = _csr([1, 1, 1, 1], [0, 0, 1, 2], [1, 2, 2, 0], 3)
+    G1 = Graph.from_csr(A1, directed=False, weighted=True)
+    assert G1.is_connected()
+
+    # Disconnected undirected graph
+    A2 = _csr([1, 1], [0, 0], [1, 2], 4)
+    G2 = Graph.from_csr(A2, directed=False, weighted=True)
+    assert not G2.is_connected()
+
+    # Strongly connected directed graph
+    A3 = _csr([1, 1, 1, 1], [0, 1, 2, 2], [1, 2, 0, 1], 3)
+    G3 = Graph.from_csr(A3, directed=True, weighted=True)
+    assert G3.is_connected()
+
+    # Not strongly connected directed graph
+    A4 = _csr([1, 1], [0, 1], [1, 2], 3)
+    G4 = Graph.from_csr(A4, directed=True, weighted=True)
+    assert not G4.is_connected()
+
+
+def test_graph_connected_components_method():
+    # Undirected graph with 2 components
+    A = _csr([1, 1, 1, 1], [0, 0, 3, 3], [1, 2, 3, 4], 5)
+    G = Graph.from_csr(A, directed=False, weighted=True)
+    n_components, labels = G.connected_components(return_labels=True)
+    assert n_components == 2
+    assert set(labels) == {0, 1}
+    assert np.allclose(labels, np.array([0, 0, 0, 1, 1]))
+
+
+def test_graph_degree_method_weighted_and_unweighted():
+    A = _csr([2.0, 3.0, 4.0, 5.0], [0, 1, 3, 3], [1, 2, 2, 0], 4)
+    G_weighted = Graph.from_csr(A, directed=False, weighted=True)
+    deg_weighted = G_weighted.degree()
+    assert np.allclose(deg_weighted, np.array([7.0, 5.0, 7.0, 9.0]))
+
+    # ignore weights
+    deg_weighted = G_weighted.degree(ignore_weights=True)
+    assert np.allclose(deg_weighted, np.array([2, 2, 2, 2]))
+
+    G_unweighted = Graph.from_csr(A, directed=False, weighted=False)
+    deg_unweighted = G_unweighted.degree()
+    assert np.allclose(deg_unweighted, np.array([2, 2, 2, 2]))
+
 
 # ----------------- exporters -----------------
 @pytest.mark.skipif(not HAS_NX, reason="networkx not installed")

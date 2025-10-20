@@ -3,6 +3,7 @@ from typing import Iterable, Literal, Sequence
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
+from scipy.sparse.csgraph import connected_components
 
 
 SymOp = Literal["max", "min", "average"]
@@ -240,9 +241,16 @@ class Graph:
         meta2 = self.meta.iloc[order].reset_index(drop=True)
         return Graph(adj=A2, directed=self.directed, weighted=self.weighted, meta=meta2)
 
-    def degree(self) -> np.ndarray:
-        """Return (out-)degree for directed, degree for undirected. For weighted graphs sum of weights."""
-        if self.weighted:
+    def degree(self, ignore_weights: bool = False) -> np.ndarray:
+        """Return (out-)degree for directed, degree for undirected. For weighted graphs sum of weights.
+        
+        Parameters
+        ----------
+        ignore_weights
+            If True, count number of edges only (treat as unweighted).
+            Default is False.
+        """
+        if self.weighted and not ignore_weights:
             deg = np.asarray(self.adj.sum(axis=1)).ravel()
         else:
             # count nonzeros per row
@@ -250,3 +258,30 @@ class Graph:
         if not self.directed:
             return deg
         return deg  # could also return (out_degree, in_degree) if desired
+    
+    def is_connected(self) -> bool:
+        """Return True if the graph is connected (undirected) or strongly connected (directed)."""
+        n_components = connected_components(
+            self.adj,
+            directed=self.directed,
+            connection="strong" if self.directed else "weak",
+            return_labels=False
+            )
+        return n_components == 1
+
+    def connected_components(self, return_labels: bool = False) -> bool:
+        """Return the number of connected components or labels per node.
+        For directed graphs, strongly connected components are returned.
+        
+        Parameters
+        ----------
+        return_labels
+            If True, return an array of component labels per node instead of the number of components.
+            Default is False.
+        """
+        return connected_components(
+            self.adj,
+            directed=self.directed,
+            connection="strong" if self.directed else "weak",
+            return_labels=return_labels
+            )
