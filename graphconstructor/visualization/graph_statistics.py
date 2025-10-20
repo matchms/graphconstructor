@@ -48,9 +48,9 @@ def plot_degree_distribution(
     - When `x_scale` or `y_scale` is "log", any k=0 or p(k)=0 entries are removed
       to avoid invalid values on a log axis.
     """
-    degrees = graph.degree()
+    degrees = graph.degree(ignore_weights=True)
     if degrees.ndim != 1:
-        raise ValueError("graph.degree() must return a 1-D array of degrees.")
+        raise ValueError("graph.degree(ignore_weights=True) must return a 1-D array of degrees.")
     if degrees.size == 0:
         # Create empty plot but still return fig/ax for consistency
         if ax is None:
@@ -77,8 +77,7 @@ def plot_degree_distribution(
             raise ValueError("Degrees must be integers for degree distributions.")
 
     counts = np.bincount(degrees)  # index = k, value = count(k)
-    ks = np.nonzero(counts)[0]     # degrees that actually appear
-    freqs = counts[ks].astype(float)
+    freqs = counts.astype(float)
 
     if normalize:
         total = freqs.sum()
@@ -90,13 +89,10 @@ def plot_degree_distribution(
 
     # Handle zero-degree inclusion/exclusion
     if not include_zero_degree or x_scale == "log":
-        mask = ks > 0
-        ks, pk = ks[mask], pk[mask]
-
-    # On log y, remove zero probabilities (shouldn't occur if computed as above)
-    if y_scale == "log":
-        nz = pk > 0
-        ks, pk = ks[nz], pk[nz]
+        ks = np.nonzero(counts)[0]
+        pk = pk[ks]
+    else:
+        ks = np.arange(len(counts))
 
     # Prepare axes
     if ax is None:
@@ -170,7 +166,7 @@ def plot_degree_distributions_grid(
     if n == 0:
         raise ValueError("`graphs` must contain at least one graph.")
 
-    nrows = np.ceil(n / ncols)
+    nrows = int(np.ceil(n / ncols))
     if figsize is None:
         # heuristic: wider for more columns, taller for more rows
         figsize = (4 * ncols, 3.2 * nrows)
