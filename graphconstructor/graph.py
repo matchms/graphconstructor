@@ -254,7 +254,7 @@ class Graph:
     
     def is_connected(self) -> bool:
         """Return True if the graph is connected (undirected) or strongly connected (directed)."""
-        n_components, _ = connected_components(
+        n_components = connected_components(
             self.adj,
             directed=self.directed,
             connection="strong" if self.directed else "weak",
