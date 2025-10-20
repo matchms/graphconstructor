@@ -155,6 +155,21 @@ def test_graph_connected_components_method():
     assert np.allclose(labels, np.array([0, 0, 0, 1, 1]))
 
 
+def test_graph_degree_method_weighted_and_unweighted():
+    A = _csr([2.0, 3.0, 4.0, 5.0], [0, 1, 3, 3], [1, 2, 2, 0], 4)
+    G_weighted = Graph.from_csr(A, directed=False, weighted=True)
+    deg_weighted = G_weighted.degree()
+    assert np.allclose(deg_weighted, np.array([7.0, 5.0, 7.0, 9.0]))
+
+    # ignore weights
+    deg_weighted = G_weighted.degree(ignore_weights=True)
+    assert np.allclose(deg_weighted, np.array([2, 2, 2, 2]))
+
+    G_unweighted = Graph.from_csr(A, directed=False, weighted=False)
+    deg_unweighted = G_unweighted.degree()
+    assert np.allclose(deg_unweighted, np.array([2, 2, 2, 2]))
+
+
 # ----------------- exporters -----------------
 @pytest.mark.skipif(not HAS_NX, reason="networkx not installed")
 def test_to_networkx_types_and_node_attributes():

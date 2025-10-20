@@ -241,9 +241,16 @@ class Graph:
         meta2 = self.meta.iloc[order].reset_index(drop=True)
         return Graph(adj=A2, directed=self.directed, weighted=self.weighted, meta=meta2)
 
-    def degree(self) -> np.ndarray:
-        """Return (out-)degree for directed, degree for undirected. For weighted graphs sum of weights."""
-        if self.weighted:
+    def degree(self, ignore_weights: bool = False) -> np.ndarray:
+        """Return (out-)degree for directed, degree for undirected. For weighted graphs sum of weights.
+        
+        Parameters
+        ----------
+        ignore_weights
+            If True, count number of edges only (treat as unweighted).
+            Default is False.
+        """
+        if self.weighted and not ignore_weights:
             deg = np.asarray(self.adj.sum(axis=1)).ravel()
         else:
             # count nonzeros per row
