@@ -14,8 +14,6 @@ jobs:
   first_check:
     name: first code check / python-3.13 / ubuntu-latest
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -47,16 +45,3 @@ jobs:
   
       - name: Run ruff linter
         run: ruff check --output-format=github
-
-      - name: Create coverage badge (SVG)
-        run: |
-          python -m pip install --upgrade genbadge[coverage]
-          mkdir -p badges
-          genbadge coverage -i coverage.xml -o docs/badges/coverage.svg
-
-      - name: Commit coverage badge on default branch
-        if: github.ref == 'refs/heads/main'
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "ci: update coverage badge [skip ci]"
-          file_pattern: docs/badges/coverage.svg
