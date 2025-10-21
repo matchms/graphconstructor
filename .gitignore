@@ -19,6 +19,7 @@ xunit-result.xml
 .scannerwork/
 
 paper/
+docs/badges/
 
 # ide
 .idea
