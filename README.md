@@ -1,6 +1,9 @@
 ![GitHub License](https://img.shields.io/github/license/matchms/graphconstructor)
 [![PyPI](https://img.shields.io/pypi/v/graphconstructor?color=teal)](https://pypi.org/project/graphconstructor/)
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/matchms/graphconstructor/CI_build_and_matrix_tests.yml?branch=main)
+![[GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/matchms/graphconstructor/CI_build_and_matrix_tests.yml?branch=main)](https://img.shields.io/github/actions/workflow/status/matchms/graphconstructor/CI_build_and_matix_tests.yml
+)
+![coverage](https://raw.githubusercontent.com/matchms/graphconstructor/main/docs/badges/coverage.svg)
+
 
 <img src="/docs/graphconstructor_logo.png" alt="Alt Text" width="600">
 
