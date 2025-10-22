@@ -69,7 +69,8 @@ class Graph:
     ) -> "Graph":
         A = cls._ensure_csr(adj)
         if not weighted:
-            A = A.copy() if (sp.issparse(adj) and not copy) else (A if copy else A)
+            if not copy and sp.issparse(adj):
+                A = A.copy()
             A.data[:] = 1.0
         if not directed:
             A = cls._symmetrize(A, how=sym_op)
@@ -284,7 +285,7 @@ class Graph:
         """Return True if the graph is connected (undirected) or strongly connected (directed)."""      
         return self.connected_components(return_labels=False) == 1
 
-    def connected_components(self, return_labels: bool = False) -> bool:
+    def connected_components(self, return_labels: bool = False) -> int | np.ndarray:
         """Return the number of connected components or labels per node.
         For directed graphs, strongly connected components are returned.
         
