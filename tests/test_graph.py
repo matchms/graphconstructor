@@ -190,6 +190,41 @@ def test_graph_degree_method_weighted_and_unweighted():
     assert np.allclose(deg_unweighted, np.array([2, 2, 2, 2]))
 
 
+def test_graph_degree_method_selfloops_counted_twice_unweighted():
+    S = np.array([
+        [1, 0, 0],
+        [0, 1, 0],
+        [1, 0, 0]
+    ])
+    # undirected case
+    G = Graph.from_dense(S, directed=False, weighted=True, ignore_selfloops=False, sym_op="max")
+    deg = G.degree()
+    assert np.allclose(deg, np.array([3, 2, 1]))  # node 0 and 1 have self-loop counted twice
+
+    # directed case
+    G = Graph.from_dense(S, directed=True, weighted=True, ignore_selfloops=False, sym_op="max")
+    deg_out, deg_in = G.degree()
+    assert np.allclose(deg_in, np.array([2, 1, 0]))
+    assert np.allclose(deg_out, np.array([1, 1, 1]))
+
+def test_graph_degree_method_selfloops_counted_twice_weighted():
+    S = np.array([
+        [1, 0, 0],
+        [0, 2.5, 0],
+        [0.25, 0, 0]
+    ])
+    # undirected case
+    G = Graph.from_dense(S, directed=False, weighted=True, ignore_selfloops=False, sym_op="max")
+    deg = G.degree()
+    assert np.allclose(deg, np.array([2.25, 5, 0.25]))  # node 0 and 1 have self-loop counted twice
+
+    # directed case
+    G = Graph.from_dense(S, directed=True, weighted=True, ignore_selfloops=False, sym_op="max")
+    deg_out, deg_in = G.degree()
+    assert np.allclose(deg_in, np.array([1.25, 2.5, 0]))
+    assert np.allclose(deg_out, np.array([1, 2.5, 0.25]))
+
+
 # ----------------- exporters -----------------
 @pytest.mark.skipif(not HAS_NX, reason="networkx not installed")
 def test_to_networkx_types_and_node_attributes():

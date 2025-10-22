@@ -263,23 +263,59 @@ class Graph:
         meta2 = self.meta.iloc[order].reset_index(drop=True)
         return Graph(adj=A2, directed=self.directed, weighted=self.weighted, meta=meta2)
 
-    def degree(self, ignore_weights: bool = False) -> np.ndarray:
-        """Return (out-)degree for directed, degree for undirected. For weighted graphs sum of weights.
-        
+    def degree(self, ignore_weights: bool = False) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
+        """Return node degree(s).
+
+        Undirected graphs:
+            Returns a 1D array of degrees. Self-loops (if present) are counted twice.
+            For weighted graphs (and ignore_weights=False), weights are summed and
+            the diagonal value is added a second time to count the loop twice.
+
+        Directed graphs:
+            Returns a tuple (out_degree, in_degree). Each self-loop contributes +1
+            to out_degree and +1 to in_degree in the unweighted case, or its weight
+            to both in the weighted case.
+
+        Note:
+            If self-loops were removed (e.g., default for undirected graphs when
+            ignore_selfloops=True during construction), there are no diagonal entries
+            to count and behavior reduces to standard degree computation.
+
         Parameters
         ----------
         ignore_weights
-            If True, count number of edges only (treat as unweighted).
+            If True, treat the graph as unweighted and count edges only.
             Default is False.
         """
+        A = self.adj
+
+        if self.directed:
+            if self.weighted and not ignore_weights:
+                # Weighted: sums per row/col; a loop weight contributes to both.
+                out_deg = np.asarray(A.sum(axis=1)).ravel()
+                in_deg = np.asarray(A.sum(axis=0)).ravel()
+            else:
+                # Unweighted counts: number of stored arcs per row/col.
+                out_deg = np.diff(A.indptr).astype(float)
+                in_deg = np.diff(A.tocsc().indptr).astype(float)
+            return out_deg, in_deg
+
+        # Undirected
         if self.weighted and not ignore_weights:
-            deg = np.asarray(self.adj.sum(axis=1)).ravel()
-        else:
-            # count nonzeros per row
-            deg = np.diff(self.adj.indptr).astype(float)
-        if not self.directed:
-            return deg
-        return deg  # could also return (out_degree, in_degree) if desired
+            # Row sums (include loops once) + add diagonal once more to count them twice.
+            deg = np.asarray(A.sum(axis=1)).ravel()
+            diag = A.diagonal()
+            if diag.size:
+                deg += diag
+            return deg.astype(float, copy=False)
+
+        # Unweighted counts: nonzeros per row; add 1 for each loop to count it twice.
+        deg = np.diff(A.indptr).astype(float)
+        if self.has_self_loops:
+            diag_nz = (A.diagonal() != 0).astype(float)
+            deg += diag_nz
+        return deg
+
     
     def is_connected(self) -> bool:
         """Return True if the graph is connected (undirected) or strongly connected (directed)."""      
