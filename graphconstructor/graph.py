@@ -258,8 +258,7 @@ class Graph:
         if self.meta is None or col not in self.meta.columns:
             raise KeyError(f"Column '{col}' not found in metadata.")
         order = np.argsort(self.meta[col].to_numpy())
-        P = sp.identity(self.n_nodes, format="csr")[order]  # permutation matrix as row selector
-        A2 = (P @ self.adj @ P.T).tocsr(copy=False)
+        A2 = self.adj[order][:, order]
         meta2 = self.meta.iloc[order].reset_index(drop=True)
         return Graph(adj=A2, directed=self.directed, weighted=self.weighted, meta=meta2)
 
