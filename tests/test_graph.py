@@ -64,6 +64,14 @@ def test_from_csr_metadata_alignment_and_names():
         Graph.from_csr(A, directed=False, weighted=True, meta=meta.iloc[:1])
 
 
+def test_from_edges_missing_weights():
+    """Test that from_edges raises ValueError when weights are missing for weighted graph."""
+    edges = np.array([[0, 1], [1, 2]])
+    weights = None
+    with pytest.raises(ValueError, match="weights must be provided"):
+        _ = Graph.from_edges(n=3, edges=edges, weights=weights, directed=False, weighted=True)
+
+
 def test_from_edges_and_from_dense_equivalence_to_from_csr():
     edges = np.array([[0, 1], [1, 2]])
     weights = np.array([2.0, 3.0])

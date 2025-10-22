@@ -13,6 +13,12 @@ SymOp = Literal["max", "min", "average"]
 class Graph:
     """Sparse (CSR) graph with optional node metadata.
 
+    This is the central data structure in graphconstructor. It represents a graph
+    via its adjacency matrix in CSR format, along with flags for directedness and
+    weightedness, and optional node metadata in a pandas DataFrame.
+
+    Attributes
+    ----------
     - `adj`: CSR adjacency of shape (n, n)
     - `directed`: True if directed, else undirected (stored symmetric)
     - `weighted`: True if edge weights are meaningful; if False, all edges are 1.0
@@ -105,8 +111,9 @@ class Graph:
 
         if weights is None:
             data = np.ones_like(rows, dtype=float)
-            # edges w/o weights → unweighted
-            weighted_eff = False if not weighted else False if weights is None else True
+            if weighted:
+                raise ValueError("weights must be provided if weighted=True.")
+            weighted_eff = False
         else:
             data = np.asarray(weights, dtype=float)
             if data.shape[0] != rows.shape[0]:
@@ -260,14 +267,8 @@ class Graph:
         return deg  # could also return (out_degree, in_degree) if desired
     
     def is_connected(self) -> bool:
-        """Return True if the graph is connected (undirected) or strongly connected (directed)."""
-        n_components = connected_components(
-            self.adj,
-            directed=self.directed,
-            connection="strong" if self.directed else "weak",
-            return_labels=False
-            )
-        return n_components == 1
+        """Return True if the graph is connected (undirected) or strongly connected (directed)."""      
+        return self.connected_components(return_labels=False) == 1
 
     def connected_components(self, return_labels: bool = False) -> bool:
         """Return the number of connected components or labels per node.
