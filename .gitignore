@@ -20,6 +20,7 @@ xunit-result.xml
 
 paper/
 docs/badges/
+prototyping/
 
 # ide
 .idea

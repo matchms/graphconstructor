@@ -28,6 +28,12 @@ class Graph:
     directed: bool
     weighted: bool
     meta: pd.DataFrame | None = None
+    ignore_selfloops: bool = None
+
+    def __post_init__(self):
+        # Default: ignore self-loops for undirected graphs
+        if self.ignore_selfloops is None:
+            self.ignore_selfloops = not self.directed
 
     # -------- Construction helpers --------
     @staticmethod
@@ -57,6 +63,7 @@ class Graph:
         directed: bool = False,
         weighted: bool = True,
         meta: pd.DataFrame | None = None,
+        ignore_selfloops: bool = None,
         sym_op: SymOp = "max",
         copy: bool = False,
     ) -> "Graph":
@@ -66,8 +73,10 @@ class Graph:
             A.data[:] = 1.0
         if not directed:
             A = cls._symmetrize(A, how=sym_op)
-        # drop self-loops by default (TODO: maybe add flag later?)
-        if A.diagonal().any():
+        # Ignore self-loops (unless directed or specified otherwise)
+        if ignore_selfloops is None:
+            ignore_selfloops = not directed
+        if ignore_selfloops and A.diagonal().any():
             A = A.tolil(copy=False)
             A.setdiag(0)
             A = A.tocsr(copy=False)
@@ -98,6 +107,7 @@ class Graph:
         directed: bool = False,
         weighted: bool = True,
         meta: pd.DataFrame | None = None,
+        ignore_selfloops: bool = None,
         sym_op: SymOp = "max",
     ) -> "Graph":
         """Build from an edge list. For undirected=True, we symmetrize later."""
@@ -124,7 +134,11 @@ class Graph:
         # if user declared weighted=False, force ones
         if not weighted:
             A.data[:] = 1.0
-        return cls.from_csr(A, directed=directed, weighted=weighted_eff, meta=meta, sym_op=sym_op)
+        return cls.from_csr(
+            A, directed=directed,
+            weighted=weighted_eff,
+            ignore_selfloops=ignore_selfloops,
+            meta=meta, sym_op=sym_op)
 
     # -------- Core properties --------
     @property

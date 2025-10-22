@@ -30,7 +30,7 @@ def test_from_csr_enforces_square_and_drops_self_loops_and_symmetrizes_max():
     # 3x3 with asymmetry + self-loops
     A = _csr(
         data=[1.0, 5.0, 3.0, 2.0, 7.0],
-        rows=[0,   0,   1,   2,   2],
+        rows=[0,   0,   1,   2,   1],
         cols=[0,   1,   0,   2,   2],
         n=3,
     )
@@ -45,6 +45,18 @@ def test_from_csr_enforces_square_and_drops_self_loops_and_symmetrizes_max():
     # flags
     assert not G.directed and G.weighted
 
+def test_from_csr_enforces_square_and_keep_selfloops():
+    # 3x3 with asymmetry + self-loops
+    A = _csr(
+        data=[1.0, 5.0, 3.0, 2.0, 7.0],
+        rows=[0,   0,   1,   2,   1],
+        cols=[0,   1,   0,   2,   2],
+        n=3,
+    )
+    G = Graph.from_csr(A, directed=True, weighted=True, sym_op="max")
+
+    # self-loops removed
+    assert np.allclose(G.adj.diagonal(), np.array([1., 0., 2.]))
 
 def test_from_csr_unweighted_forces_unit_weights():
     A = _csr([0.2, 0.8], [0, 1], [1, 0], 2)
