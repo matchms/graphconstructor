@@ -45,6 +45,25 @@ def test_from_csr_enforces_square_and_drops_self_loops_and_symmetrizes_max():
     # flags
     assert not G.directed and G.weighted
 
+
+def test_symmetrization_operations():
+    """Test min, max, average symmetrization."""
+    A = _csr([5.0, 2.0], [0, 1], [1, 0], 2)
+    
+    G_max = Graph.from_csr(A, directed=False, sym_op="max")
+    assert G_max.adj[0, 1] == pytest.approx(5.0)
+    
+    G_min = Graph.from_csr(A, directed=False, sym_op="min")
+    assert G_min.adj[0, 1] == pytest.approx(2.0)
+    
+    G_avg = Graph.from_csr(A, directed=False, sym_op="average")
+    assert G_avg.adj[0, 1] == pytest.approx(3.5)
+    
+    with pytest.raises(ValueError, match="Unsupported symmetrization"):
+        Graph.from_csr(A, directed=False, sym_op="invalid")
+
+
+
 def test_from_csr_enforces_square_and_keep_selfloops():
     # 3x3 with asymmetry + self-loops
     A = _csr(
@@ -82,6 +101,17 @@ def test_from_edges_missing_weights():
     weights = None
     with pytest.raises(ValueError, match="weights must be provided"):
         _ = Graph.from_edges(n=3, edges=edges, weights=weights, directed=False, weighted=True)
+
+
+def test_from_edges_invalid_indices():
+    """Negative or out-of-bounds indices should raise error."""
+    edges = np.array([[0, 1], [1, 5]])  # 5 >= n=3
+    with pytest.raises((ValueError, IndexError)):
+        Graph.from_edges(n=3, edges=edges, weights=[1.0, 1.0])
+    
+    edges = np.array([[-1, 1], [1, 2]])  # negative index
+    with pytest.raises((ValueError, IndexError)):
+        Graph.from_edges(n=3, edges=edges, weights=[1.0, 1.0])
 
 
 def test_from_edges_and_from_dense_equivalence_to_from_csr():
@@ -132,6 +162,39 @@ def test_drop_by_index_and_name_updates_adj_and_meta():
     assert G2.adj.nnz >= 0  # structural check
 
 
+def test_drop_nonexistent_node():
+    """Should raise KeyError/IndexError for invalid nodes."""
+    A = _csr([1], [0], [1], 2)
+    G = Graph.from_csr(A, directed=False)
+    
+    with pytest.raises(IndexError):
+        G.drop([5])  # out of range
+    
+    with pytest.raises(KeyError):
+        G.drop(["nonexistent"])  # name not found
+
+
+def test_drop_empty_list():
+    """Dropping empty list should return same graph."""
+    A = _csr([1], [0], [1], 2)
+    G = Graph.from_csr(A, directed=False)
+    G2 = G.drop([])
+    assert G2.n_nodes == G.n_nodes
+
+
+def test_drop_single_value():
+    """Test dropping a single int/str (not in list)."""
+    A = _csr([1], [0], [1], 3)
+    meta = pd.DataFrame({"name": ["a", "b", "c"]})
+    G = Graph.from_csr(A, directed=False, meta=meta)
+    
+    G2 = G.drop(1)  # single int
+    assert G2.n_nodes == 2
+    
+    G3 = G.drop("b")  # single string
+    assert G3.n_nodes == 2
+
+
 def test_sorted_by_permuted_order():
     A = _csr([1, 1], [0, 1], [1, 2], 3)
     meta = pd.DataFrame({"name": ["c", "a", "b"], "score": [3, 1, 2]})
@@ -141,6 +204,21 @@ def test_sorted_by_permuted_order():
     assert G2.node_names == ["a", "b", "c"]
     # adjacency must be permuted consistently
     assert G2.adj.shape == (3, 3)
+
+
+def test_copy_creates_independent_graph():
+    """Modifications to copy shouldn't affect original."""
+    A = _csr([1], [0], [1], 2)
+    meta = pd.DataFrame({"name": ["a", "b"]})
+    G = Graph.from_csr(A, meta=meta)
+    
+    G2 = G.copy()
+    G2.adj.data[0] = 999.0
+    assert G.adj.data[0] != 999.0  # original unchanged
+    
+    G2.meta.iloc[0, 0] = "changed"
+    assert G.meta.iloc[0, 0] == "a"  # original unchanged
+
 
 # ----------------- utilities -----------------
 def test_graph_is_connected_method():
