@@ -83,7 +83,7 @@ D = (D + D.T) / 2
 np.fill_diagonal(D, 0.0)
 
 # Import (from dense array)
-G0 = from_dense(D, directed=False)
+G0 = from_dense(D, directed=False, mode="distance")
 ```
 
 ### 2) Refine a graph (operators)
