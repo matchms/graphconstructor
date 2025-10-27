@@ -1,9 +1,11 @@
+import warnings
 from dataclasses import dataclass
 from typing import Iterable, Literal, Sequence
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 from scipy.sparse.csgraph import connected_components
+from .utils import ConversionMethod, Mode, convert_adjacency_mode
 
 
 SymOp = Literal["max", "min", "average"]
@@ -22,11 +24,14 @@ class Graph:
     - `adj`: CSR adjacency of shape (n, n)
     - `directed`: True if directed, else undirected (stored symmetric)
     - `weighted`: True if edge weights are meaningful; if False, all edges are 1.0
+    - `mode`: "distance" or "similarity" (for interpretation of weights)
     - `meta`: pandas DataFrame with n rows (optional). May have a 'name' column.
+    - `ignore_selfloops`: If True, self-loops are ignored/removed (default for undirected graphs)
     """
     adj: sp.csr_matrix
     directed: bool
     weighted: bool
+    mode: str
     meta: pd.DataFrame | None = None
     ignore_selfloops: bool = None
 
@@ -34,6 +39,9 @@ class Graph:
         # Default: ignore self-loops for undirected graphs
         if self.ignore_selfloops is None:
             self.ignore_selfloops = not self.directed
+        # Check mode
+        if self.mode not in {"distance", "similarity"}:
+            raise ValueError("mode must be 'distance' or 'similarity'.")
 
     # -------- Construction helpers --------
     @staticmethod
@@ -59,6 +67,7 @@ class Graph:
     def from_csr(
         cls,
         adj: sp.spmatrix | np.ndarray,
+        mode: str,
         *,
         directed: bool = False,
         weighted: bool = True,
@@ -88,21 +97,28 @@ class Graph:
             if len(meta) != n:
                 raise ValueError(f"meta has {len(meta)} rows but adjacency is {n}x{n}.")
             meta = meta.reset_index(drop=True)
-        return cls(adj=A.astype(float, copy=False), directed=directed, weighted=weighted, meta=meta)
+        return cls(
+            adj=A.astype(float, copy=False),
+            directed=directed, weighted=weighted,
+            mode=mode, ignore_selfloops=ignore_selfloops,
+            meta=meta
+            )
 
     @classmethod
     def from_dense(
         cls,
         adj: np.ndarray,
+        mode: str,
         **kwargs,
     ) -> "Graph":
-        return cls.from_csr(adj, **kwargs)
+        return cls.from_csr(adj, mode=mode, **kwargs)
 
     @classmethod
     def from_edges(
         cls,
         n: int,
         edges: Sequence[tuple[int, int]] | np.ndarray,
+        mode: str,
         weights: Sequence[float] | np.ndarray | None = None,
         *,
         directed: bool = False,
@@ -138,8 +154,10 @@ class Graph:
         return cls.from_csr(
             A, directed=directed,
             weighted=weighted_eff,
+            mode=mode,
             ignore_selfloops=ignore_selfloops,
-            meta=meta, sym_op=sym_op)
+            meta=meta, sym_op=sym_op
+            )
 
     # -------- Core properties --------
     @property
@@ -197,7 +215,73 @@ class Graph:
 
         A2 = self.adj[keep_mask][:, keep_mask].tocsr(copy=False)
         meta2 = self.meta.loc[keep_mask].reset_index(drop=True) if self.meta is not None else None
-        return Graph(adj=A2, directed=self.directed, weighted=self.weighted, meta=meta2)
+        return Graph(adj=A2, directed=self.directed, weighted=self.weighted, mode=self.mode, meta=meta2)
+
+    # ----- Convert distance/similarity -----
+    def convert_mode(
+        self,
+        target_mode: Mode,
+        method: ConversionMethod = "reciprocal",
+        inplace: bool = False,
+        **kwargs
+    ) -> "Graph":
+        """
+        Convert graph weights between distance and similarity representations.
+        
+        Parameters
+        ----------
+        target_mode : {"distance", "similarity"}
+            Desired mode for edge weights.
+        method : str or callable, default="reciprocal"
+            Conversion method to use. Options:
+            
+            - "reciprocal": similarity = 1/distance (default, bidirectional)
+            - "negative": similarity = -distance (bidirectional, for optimization)
+            - "exp": similarity = exp(-distance) (distance -> similarity only)
+            - "gaussian": similarity = exp(-distance^2/(2*sigma^2)) (distance -> similarity only)
+            - Custom callable: func(weights) -> converted_weights
+        inplace : bool, default=False
+            If True, modify this graph in place and return self.
+            If False (default), create and return a new Graph instance.
+        **kwargs
+            Additional parameters for conversion:
+            
+            - epsilon (float): Small value to avoid division by zero (default: 1e-10)
+            - sigma (float): Bandwidth for gaussian method (default: 1.0)
+        """
+        if target_mode not in ("distance", "similarity"):
+            raise ValueError(
+                f"target_mode must be 'distance' or 'similarity', got '{target_mode}'"
+            )
+        
+        if self.mode == target_mode:
+            warnings.warn(
+                f"Graph is already in '{target_mode}' mode. "
+                "Returning unchanged."
+            )
+            return self
+        
+        # Convert the adjacency matrix
+        new_adj = convert_adjacency_mode(
+            self.adj,
+            source_mode=self.mode,
+            target_mode=target_mode,
+            method=method,
+            inplace=inplace,
+            **kwargs
+        )
+        
+        if inplace:
+            self.adj = new_adj
+            self.mode = target_mode
+            return self
+        else:
+            # Create a new Graph instance
+            return Graph(
+                adj=new_adj,
+                mode=target_mode,
+                directed=self.directed
+            )
 
     # -------- Exporters --------
     def to_networkx(self):
@@ -250,6 +334,7 @@ class Graph:
             adj=self.adj.copy(),
             directed=self.directed,
             weighted=self.weighted,
+            mode=self.mode,
             meta=None if self.meta is None else self.meta.copy(),
         )
 
@@ -260,7 +345,7 @@ class Graph:
         order = np.argsort(self.meta[col].to_numpy())
         A2 = self.adj[order][:, order]
         meta2 = self.meta.iloc[order].reset_index(drop=True)
-        return Graph(adj=A2, directed=self.directed, weighted=self.weighted, meta=meta2)
+        return Graph(adj=A2, directed=self.directed, weighted=self.weighted, mode=self.mode, meta=meta2)
 
     def degree(self, ignore_weights: bool = False) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
         """Return node degree(s).
