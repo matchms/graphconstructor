@@ -26,7 +26,7 @@ def test_knn_selector_distance_k2_undirected_symmetric_max():
         cols=[1, 2, 3,        0, 2, 3,        0, 1, 3,        0, 1, 2],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     out = KNNSelector(k=2, mutual=False, mode="distance").apply(G0)
     A2 = out.adj
@@ -56,7 +56,7 @@ def test_knn_selector_similarity_k1_mode_override_and_symmetry():
         cols=[1, 2,       0, 2,       0, 1],
         n=3,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     out = KNNSelector(k=1, mutual=False, mode="similarity").apply(G0)
     A2 = out.adj
@@ -84,7 +84,7 @@ def test_knn_selector_mutual_true_and_mutual_k_limits_per_row():
         cols=[1, 2,       2, 0,       1, 0],
         n=3,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     out = KNNSelector(k=1, mutual=True, mutual_k=2, mode="distance").apply(G0)
     A2 = out.adj
@@ -114,7 +114,7 @@ def test_knn_selector_preserves_directed_flag_and_unit_weights_when_graph_is_unw
         n=3,
     )
     # Mark as unweighted => data coerced to 1.0 by Graph.from_csr
-    G0 = Graph.from_csr(A, directed=True, weighted=False)
+    G0 = Graph.from_csr(A, directed=True, weighted=False, mode="similarity")
 
     out = KNNSelector(k=1, mutual=False, mode="similarity").apply(G0)
     assert out.directed and not out.weighted

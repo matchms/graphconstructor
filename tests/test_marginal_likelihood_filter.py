@@ -27,7 +27,7 @@ def test_mlf_undirected_matches_binomial_tail():
         cols=[1, 2, 2, 3],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     # Compute strengths and T from the symmetrized adjacency
     A_sym = G0.adj  # already symmetric, no self-loops
@@ -74,7 +74,7 @@ def test_mlf_directed_uses_out_in_degrees():
         cols=[1, 2, 0, 2],
         n=3,
     )
-    G0 = Graph.from_csr(A, directed=True, weighted=True)
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity")
 
     A_dir = G0.adj.tocsr()
     kout = np.asarray(A_dir.sum(axis=1)).ravel()
@@ -111,7 +111,7 @@ def test_mlf_alpha_monotonicity():
         cols=[1, 2, 2, 3, 0, 1],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True)
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity")
 
     G_small = MarginalLikelihoodFilter(alpha=0.01).apply(G0)
     G_large = MarginalLikelihoodFilter(alpha=0.2).apply(G0)
@@ -124,7 +124,7 @@ def test_mlf_alpha_monotonicity():
 # ----------------- Degenerate T = 0 case -----------------
 def test_mlf_handles_no_edges_T_zero():
     A = sp.csr_matrix((3, 3), dtype=float)  # all zeros
-    G0 = Graph.from_csr(A, directed=False, weighted=True)
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity")
     out = MarginalLikelihoodFilter(alpha=0.05).apply(G0)
     assert out.adj.nnz == 0
     assert out.adj.shape == (3, 3)
@@ -134,7 +134,7 @@ def test_mlf_handles_no_edges_T_zero():
 def test_mlf_preserves_flags_and_copies_metadata_when_requested():
     meta = pd.DataFrame({"name": ["a", "b", "c"], "group": [1, 0, 1]})
     A = _csr([1, 2], [0, 1], [1, 2], 3)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, meta=meta)
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta)
 
     op = MarginalLikelihoodFilter(alpha=0.5, copy_meta=True)
     out = op.apply(G0)

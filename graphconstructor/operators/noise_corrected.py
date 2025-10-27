@@ -26,10 +26,10 @@ class NoiseCorrected(GraphOperator):
     copy_meta : bool
         If True, copy metadata DataFrame; otherwise keep reference.
     """
-
     delta: float = 1.64
     derivative: str = "constant"
     copy_meta: bool = True
+    supported_modes = ["similarity"]
 
     # ---------- Bayesian shrinkage for P_ij ----------
     def _posterior_mean_p(
@@ -117,6 +117,7 @@ class NoiseCorrected(GraphOperator):
                 A.copy(),
                 directed=True,
                 weighted=G.weighted,
+                mode=G.mode,
                 meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
             )
 
@@ -134,6 +135,7 @@ class NoiseCorrected(GraphOperator):
             A_f,
             directed=True,
             weighted=G.weighted,
+            mode=G.mode,
             meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
         )
 
@@ -146,6 +148,7 @@ class NoiseCorrected(GraphOperator):
                 A.copy(),
                 directed=False,
                 weighted=G.weighted,
+                mode=G.mode,
                 meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
                 sym_op="max",
             )
@@ -171,9 +174,11 @@ class NoiseCorrected(GraphOperator):
             A_f,
             directed=False,
             weighted=G.weighted,
+            mode=G.mode,
             meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
             sym_op="max",
         )
 
     def apply(self, G: Graph) -> Graph:
+        self._check_mode_supported(G)
         return self._apply_directed(G) if G.directed else self._apply_undirected(G)
