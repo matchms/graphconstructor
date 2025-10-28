@@ -25,6 +25,36 @@ def _csr(data, rows, cols, n):
     )
 
 
+@pytest.fixture
+def S_dense():
+    """Simple 4-node dense similarity matrix."""
+    return np.array([
+        [0.0, 0.2, 0.8, 0.5],
+        [0.2, 0.0, 0.6, 0.3],
+        [0.8, 0.6, 0.0, 0.4],
+        [0.5, 0.3, 0.4, 0.0],
+    ], dtype=float)
+
+
+@pytest.fixture
+def S_csr():
+    """Simple 4-node sparse similarity matrix."""
+    return _csr(
+        data=[0.2, 0.8, 0.5, 0.6, 0.3, 0.4],
+        rows=[0, 0, 0, 1, 1, 2],
+        cols=[1, 2, 3, 2, 3, 3],
+        n=4,
+    )
+
+
+@pytest.fixture
+def meta_df():
+    """Simple metadata DataFrame for 4 nodes."""
+    return pd.DataFrame({
+        "name": ["node0", "node1", "node2", "node3"],
+        "group": [0, 1, 0, 2],
+    })
+
 # ----------------- construction invariants -----------------
 def test_from_csr_enforces_square_and_drops_self_loops_and_symmetrizes_max():
     # 3x3 with asymmetry + self-loops
@@ -65,7 +95,6 @@ def test_symmetrization_operations():
         Graph.from_csr(A, directed=False, mode="distance", sym_op="invalid")
 
 
-
 def test_from_csr_enforces_square_and_keep_selfloops():
     # 3x3 with asymmetry + self-loops
     A = _csr(
@@ -78,6 +107,21 @@ def test_from_csr_enforces_square_and_keep_selfloops():
 
     # self-loops removed
     assert np.allclose(G.adj.diagonal(), np.array([1., 0., 2.]))
+
+
+def test_from_csr_enforces_square_and_keep_selfloops(S_dense):
+    G_no_selfloops = Graph.from_dense(
+        S_dense, directed=True, weighted=True, mode="distance", sym_op="max",
+        ignore_selfloops=True
+        )
+    G_selfloops = Graph.from_dense(
+        S_dense, directed=True, weighted=True, mode="distance", sym_op="max",
+        ignore_selfloops=False
+        )
+    assert np.allclose(G_no_selfloops.adj.diagonal(), 0.0)
+    assert np.allclose(G_selfloops.adj.diagonal(), S_dense.diagonal())
+
+
 
 def test_from_csr_unweighted_forces_unit_weights():
     A = _csr([0.2, 0.8], [0, 1], [1, 0], 2)
@@ -337,3 +381,56 @@ def test_to_igraph_types_and_attributes():
     assert igG.vs["label"] == [10, 20, 30]
     # edge weights exist
     assert "weight" in igG.es.attributes()
+
+
+# ----------------- Distance/similarity conversion -----------------
+def test_convert_mode_distance_to_similarity_and_back_dense(S_dense, meta_df):
+    G = Graph.from_dense(
+        S_dense, directed=False, weighted=True, mode="similarity", meta=meta_df
+        )
+    G_dist = G.convert_mode("distance")
+    assert G_dist.mode == "distance"
+    G_sim = G_dist.convert_mode("similarity")
+    assert G_sim.mode == "similarity"
+    assert np.allclose(G_sim.adj.toarray(), G.adj.toarray())
+    # Metadata preserved
+    assert G_sim.meta.equals(G.meta)
+
+
+def test_convert_mode_distance_to_similarity_and_back_csr(S_csr, meta_df):
+    G = Graph.from_csr(
+        S_csr, directed=False, weighted=True, mode="similarity", meta=meta_df
+        )
+    G_dist = G.convert_mode("distance")
+    assert G_dist.mode == "distance"
+    G_sim = G_dist.convert_mode("similarity")
+    assert G_sim.mode == "similarity"
+    assert np.allclose(G_sim.adj.toarray(), G.adj.toarray())
+    # Metadata preserved
+    assert G_sim.meta.equals(G.meta)
+
+    # Conversion to dense should lead to different values (in place of 0s)
+    G_dense = Graph.from_dense(
+        S_csr.toarray(), directed=False, weighted=True, mode="similarity", meta=meta_df
+        )
+    G_dist_dense = G_dense.convert_mode("distance")
+    assert G_dense.adj.data.shape == G.adj.data.shape  # no change in dense conversion
+    assert G_dist_dense.adj.data.shape == G_dist.adj.data.shape  # no change in dense conversion
+
+
+# --------------- expliccit zero handling ---------------
+def test_keep_explicit_zeros_in_symmetrization():
+    D_csr =_csr(
+        data=[0.2, 0.8, 0.5, 0.0, 0.3, 0.4],
+        rows=[0, 0, 0, 1, 1, 2],
+        cols=[1, 2, 3, 2, 3, 3],
+        n=4,
+    )
+    G = Graph.from_csr(D_csr, mode="distance")
+    assert np.allclose(G.adj.data, np.array([0.2, 0.8, 0.5, 0.2, 0. , 0.3, 0.8, 0.4, 0.5, 0.3, 0.4]))
+
+    G_no_zeros = Graph.from_csr(D_csr, mode="distance", keep_explicit_zeros=False)
+    assert np.allclose(G_no_zeros.adj.data, np.array([0.2, 0.8, 0.5, 0.2, 0.3, 0.8, 0.4, 0.5, 0.3, 0.4]))
+
+    G_sim = Graph.from_csr(D_csr, mode="similarity")
+    assert np.allclose(G_sim.adj.data, np.array([0.2, 0.8, 0.5, 0.2, 0.3, 0.8, 0.4, 0.5, 0.3, 0.4]))

@@ -1,11 +1,10 @@
-import warnings
 from dataclasses import dataclass
 from typing import Iterable, Literal, Sequence
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 from scipy.sparse.csgraph import connected_components
-from .utils import ConversionMethod, Mode, convert_adjacency_mode
+from .utils import ConversionMethod, Mode, _drop_diagonal, convert_adjacency_mode
 
 
 SymOp = Literal["max", "min", "average"]
@@ -27,6 +26,7 @@ class Graph:
     - `mode`: "distance" or "similarity" (for interpretation of weights)
     - `meta`: pandas DataFrame with n rows (optional). May have a 'name' column.
     - `ignore_selfloops`: If True, self-loops are ignored/removed (default for undirected graphs)
+    - `keep_explicit_zeros`: If True, explicit zeros in adjacency are kept (default for distance graphs)
     """
     adj: sp.csr_matrix
     directed: bool
@@ -34,11 +34,15 @@ class Graph:
     mode: str
     meta: pd.DataFrame | None = None
     ignore_selfloops: bool = None
+    keep_explicit_zeros: bool = None
 
     def __post_init__(self):
         # Default: ignore self-loops for undirected graphs
         if self.ignore_selfloops is None:
             self.ignore_selfloops = not self.directed
+        # Default: keep explicit zeros for distance graphs
+        if self.keep_explicit_zeros is None:
+            self.keep_explicit_zeros = self.mode == "distance"
         # Check mode
         if self.mode not in {"distance", "similarity"}:
             raise ValueError("mode must be 'distance' or 'similarity'.")
@@ -53,15 +57,39 @@ class Graph:
             raise TypeError("Adjacency must be square (n x n).")
         return sp.csr_matrix(arr)
 
+
     @staticmethod
-    def _symmetrize(A: sp.csr_matrix, how: SymOp = "max") -> sp.csr_matrix:
+    def _preserve_explicit_zeros(original: sp.csr_matrix, result: sp.csr_matrix) -> sp.csr_matrix:
+        """Reinsert explicit zeros that were present in `original` into `result` (CSR).
+        This avoids CSR ops (like max/min/avg) pruning stored zeros."""
+        coo = original.tocoo()
+        zmask = (coo.data == 0)
+        if not np.any(zmask):
+            return result
+        zr = coo.row[zmask]
+        zc = coo.col[zmask]
+        # Merge by concatenating coordinates with zero data; CSR will coalesce duplicates.
+        res_coo = result.tocoo()
+        rows = np.concatenate([res_coo.row, zr])
+        cols = np.concatenate([res_coo.col, zc])
+        data = np.concatenate([res_coo.data, np.zeros(zr.size, dtype=float)])
+        return sp.csr_matrix((data, (rows, cols)), shape=result.shape)
+
+    @staticmethod
+    def _symmetrize(A: sp.csr_matrix, how: SymOp = "max",
+                    *, preserve_zeros_from: sp.csr_matrix | None = None) -> sp.csr_matrix:
         if how == "max":
-            return A.maximum(A.T)
-        if how == "min":
-            return A.minimum(A.T)
-        if how == "average":
-            return (A + A.T) * 0.5
-        raise ValueError("Unsupported symmetrization op. Use 'max', 'min', or 'average'.")
+            B = A.maximum(A.T)
+        elif how == "min":
+            B = A.minimum(A.T)
+        elif how == "average":
+            B = (A + A.T) * 0.5
+        else:
+            raise ValueError("Unsupported symmetrization op. Use 'max', 'min', or 'average'.")
+        # If asked, reinsert explicit zeros that existed before symmetrization.
+        if preserve_zeros_from is not None:
+            B = Graph._preserve_explicit_zeros(preserve_zeros_from, B)
+        return B
 
     @classmethod
     def from_csr(
@@ -73,24 +101,31 @@ class Graph:
         weighted: bool = True,
         meta: pd.DataFrame | None = None,
         ignore_selfloops: bool = None,
+        keep_explicit_zeros: bool = None,
         sym_op: SymOp = "max",
         copy: bool = False,
     ) -> "Graph":
+
+        # Ignore self-loops (unless directed or specified otherwise)
+        if ignore_selfloops is None:
+            ignore_selfloops = not directed
+        # Keep explicit zeros (unless similarity or specified otherwise)
+        if keep_explicit_zeros is None:
+            keep_explicit_zeros = mode == "distance"
+
         A = cls._ensure_csr(adj)
         if not weighted:
             if not copy and sp.issparse(adj):
                 A = A.copy()
             A.data[:] = 1.0
         if not directed:
-            A = cls._symmetrize(A, how=sym_op)
-        # Ignore self-loops (unless directed or specified otherwise)
-        if ignore_selfloops is None:
-            ignore_selfloops = not directed
-        if ignore_selfloops and A.diagonal().any():
-            A = A.tolil(copy=False)
-            A.setdiag(0)
-            A = A.tocsr(copy=False)
-            A.eliminate_zeros()
+            preserve_src = A if keep_explicit_zeros else None
+            A = cls._symmetrize(A, how=sym_op, preserve_zeros_from=preserve_src)
+
+        if mode == "similarity" and ignore_selfloops and A.diagonal().any():
+            A = _drop_diagonal(A)
+        if mode == "distance" and ignore_selfloops and (A.diagonal() == 0).any():
+            A = _drop_diagonal(A)
 
         n = A.shape[0]
         if meta is not None:
@@ -101,7 +136,8 @@ class Graph:
             adj=A.astype(float, copy=False),
             directed=directed, weighted=weighted,
             mode=mode, ignore_selfloops=ignore_selfloops,
-            meta=meta
+            meta=meta,
+            keep_explicit_zeros=keep_explicit_zeros,
             )
 
     @classmethod
@@ -125,9 +161,18 @@ class Graph:
         weighted: bool = True,
         meta: pd.DataFrame | None = None,
         ignore_selfloops: bool = None,
+        keep_explicit_zeros: bool = None,
         sym_op: SymOp = "max",
     ) -> "Graph":
         """Build from an edge list. For undirected=True, we symmetrize later."""
+
+        # Ignore self-loops (unless directed or specified otherwise)
+        if ignore_selfloops is None:
+            ignore_selfloops = not directed
+        # Keep explicit zeros (unless similarity or specified otherwise)
+        if keep_explicit_zeros is None:
+            keep_explicit_zeros = mode == "distance"
+
         if isinstance(edges, np.ndarray):
             if edges.ndim != 2 or edges.shape[1] != 2:
                 raise TypeError("edges ndarray must be shape (m, 2).")
@@ -156,7 +201,8 @@ class Graph:
             weighted=weighted_eff,
             mode=mode,
             ignore_selfloops=ignore_selfloops,
-            meta=meta, sym_op=sym_op
+            meta=meta, sym_op=sym_op,
+            keep_explicit_zeros=keep_explicit_zeros,
             )
 
     # -------- Core properties --------
@@ -255,11 +301,9 @@ class Graph:
             )
         
         if self.mode == target_mode:
-            warnings.warn(
-                f"Graph is already in '{target_mode}' mode. "
-                "Returning unchanged."
+            raise ValueError(
+                f"Graph is already in mode '{target_mode}'. No conversion needed."
             )
-            return self
         
         # Convert the adjacency matrix
         new_adj = convert_adjacency_mode(
@@ -280,7 +324,9 @@ class Graph:
             return Graph(
                 adj=new_adj,
                 mode=target_mode,
-                directed=self.directed
+                directed=self.directed,
+                weighted=self.weighted,
+                meta=None if self.meta is None else self.meta.copy(),
             )
 
     # -------- Exporters --------
