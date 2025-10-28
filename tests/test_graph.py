@@ -109,7 +109,7 @@ def test_from_csr_enforces_square_and_keep_selfloops():
     assert np.allclose(G.adj.diagonal(), np.array([1., 0., 2.]))
 
 
-def test_from_csr_enforces_square_and_keep_selfloops(S_dense):
+def test_from_dense_enforces_square_and_keep_selfloops(S_dense):
     G_no_selfloops = Graph.from_dense(
         S_dense, directed=True, weighted=True, mode="distance", sym_op="max",
         ignore_selfloops=True
@@ -120,7 +120,6 @@ def test_from_csr_enforces_square_and_keep_selfloops(S_dense):
         )
     assert np.allclose(G_no_selfloops.adj.diagonal(), 0.0)
     assert np.allclose(G_selfloops.adj.diagonal(), S_dense.diagonal())
-
 
 
 def test_from_csr_unweighted_forces_unit_weights():
