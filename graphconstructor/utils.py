@@ -33,6 +33,13 @@ def _make_symmetric_csr(A: csr_matrix, option: str = "max") -> csr_matrix:
     raise ValueError("Unsupported option for symmetrization.")
 
 
+def _drop_diagonal(A: sp.csr_matrix) -> sp.csr_matrix:
+    # Remove diagonal entries without touching other zeros in csr matrix
+    coo = A.tocoo()
+    mask = coo.row != coo.col
+    return sp.csr_matrix((coo.data[mask], (coo.row[mask], coo.col[mask])), shape=A.shape)
+
+
 def _coerce_knn_inputs(indices, distances) -> Tuple[np.ndarray, np.ndarray]:
     ind = _to_numpy(indices)
     dist = _to_numpy(distances)
