@@ -87,6 +87,7 @@ G0 = from_dense(D, directed=False, mode="distance")
 ```
 
 ### 2) Refine a graph (operators)
+Some operators can work on both distance and similarity based graphs, such as kNN and a simple weight thresholding method:
 
 ```python
 from graphconstructor.operators import KNNSelector, WeightThreshold
@@ -97,6 +98,19 @@ G_refined = KNNSelector(k=5, mutual=True, mutual_k=20, mode="distance").apply(G0
 # Prune weak edges (keep distance < 0.3)
 G_pruned = WeightThreshold(threshold=0.3, mode="distance").apply(G_refined)
 ```
+
+Other operators require particular either similarity or distance values as weights. In such cases it can be necessary to switch from distance to similarity measures (or vice versa).
+
+```python
+from graphconstructor.operators import NoiseCorrected
+
+# There are various method for distance/similarity conversions (including using a custom function)
+G0_sim = G0.convert_mode("similarity", method="exp")
+
+# Once converted to similarities, other operators become available 
+G_refined = NoiseCorrected().apply(G0_sim)
+```
+
 
 ### 3) Export when needed
 
