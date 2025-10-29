@@ -6,7 +6,7 @@ from matplotlib.patches import Patch
 from graphconstructor import Graph
 
 
-def plot_graph_by_class(
+def plot_graph_by_feature(
         G: Graph,
         class_attr: str = None,
         pos=None,
@@ -40,6 +40,7 @@ def plot_graph_by_class(
 
         # Stable set of unique classes (preserve first-seen order, skip None)
         unique_classes = [c for c in dict.fromkeys(node_classes) if c is not None]
+        unique_classes.sort()
     
         # Map classes -> colors
         if unique_classes:
