@@ -24,7 +24,7 @@ def test_lans_undirected_symmetry_and_weights_preserved():
         cols=[1,   2,   2,   3],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     # alpha=0.5 should keep 0->1 from node 0's perspective (p=0.5), drop 0->2 (p=1.0)
     G = LocallyAdaptiveSparsification(alpha=0.5, rule="or").apply(G0)
@@ -48,7 +48,7 @@ def test_lans_undirected_and_subset_or_and_alpha_monotonicity():
         cols=[1,   2,   2,   3,   0],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     G_or = LocallyAdaptiveSparsification(alpha=0.30, rule="or").apply(G0)
     G_and = LocallyAdaptiveSparsification(alpha=0.30, rule="and").apply(G0)
@@ -80,7 +80,7 @@ def test_lans_directed_requires_both_endpoints():
         cols=[1,   2,   1,   1,   3],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=True, weighted=True)
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity")
 
     # With a fairly small alpha, keep only edges significant on BOTH out and in sides
     G = LocallyAdaptiveSparsification(alpha=0.2).apply(G0)
@@ -93,7 +93,7 @@ def test_lans_directed_requires_both_endpoints():
 # ----------------- Negative weights rejected -----------------
 def test_lans_rejects_negative_weights():
     A = _csr([-0.3, 0.4], [0, 1], [2, 1], 3)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="average")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="average")
     with pytest.raises(ValueError, match="nonnegative"):
         LocallyAdaptiveSparsification(alpha=0.1).apply(G0)
 
@@ -102,7 +102,7 @@ def test_lans_rejects_negative_weights():
 def test_lans_handles_zero_strength_rows():
     # Node 3 has no edges; node 2 only incoming (from 1) -> fine.
     A = _csr([0.5, 0.2], [0, 1], [1, 2], 4)
-    G0 = Graph.from_csr(A, directed=True, weighted=True)
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity")
 
     G = LocallyAdaptiveSparsification(alpha=0.5).apply(G0)
     # Graph remains well-formed, only existing arcs possibly filtered
@@ -114,7 +114,7 @@ def test_lans_handles_zero_strength_rows():
 def test_lans_preserves_metadata():
     meta = pd.DataFrame({"name": ["a", "b", "c"], "grp": [1, 0, 1]})
     A = _csr([0.6, 0.4, 0.7], [0, 1, 2], [1, 2, 0], 3)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, meta=meta, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta, sym_op="max")
 
     out = LocallyAdaptiveSparsification(alpha=0.25, rule="or", copy_meta=True).apply(G0)
     assert not out.directed and out.weighted

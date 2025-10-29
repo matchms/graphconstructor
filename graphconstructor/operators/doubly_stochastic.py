@@ -33,8 +33,10 @@ class DoublyStochastic(GraphOperator):
     tolerance: float = 1e-5
     max_iter: int = 10_000
     copy_meta: bool = True
+    supported_modes = ["similarity"]
 
     def apply(self, G: Graph) -> Graph:
+        self._check_mode_supported(G)
         A = G.adj.tocsr(copy=False)
 
         if A.shape[0] != A.shape[1]:
@@ -49,6 +51,7 @@ class DoublyStochastic(GraphOperator):
                 A.copy(),
                 directed=G.directed,
                 weighted=True,
+                mode=G.mode,
                 meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
                 sym_op="max",
             )
@@ -106,6 +109,7 @@ class DoublyStochastic(GraphOperator):
             A_scaled,
             directed=G.directed,
             weighted=True,
+            mode=G.mode,
             meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
             sym_op="max",
         )

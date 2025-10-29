@@ -21,7 +21,7 @@ def test_weight_threshold_distance_keeps_lt_eps_and_symmetrizes_max():
         cols=[1, 2, 0, 2, 0, 1],
         n=3,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="min")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="min")
 
     out = WeightThreshold(threshold=0.5, mode="distance").apply(G0)
     A2 = out.adj
@@ -49,7 +49,7 @@ def test_weight_threshold_similarity_keeps_gt_tau_and_symmetrizes_max():
         cols=[1, 2, 0, 2, 0, 1],
         n=3,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     out = WeightThreshold(threshold=tau, mode="similarity").apply(G0)
     A2 = out.adj
@@ -75,7 +75,7 @@ def test_weight_threshold_preserves_directed_and_unweighted_flags():
         cols=[1, 2, 2, 1],
         n=3,
     )
-    G0 = Graph.from_csr(A, directed=True, weighted=False)  # unweighted -> all ones internally
+    G0 = Graph.from_csr(A, directed=True, weighted=False, mode="similarity")  # unweighted -> all ones internally
 
     out = WeightThreshold(threshold=0.8, mode="similarity").apply(G0)
 
@@ -100,7 +100,7 @@ def test_weight_threshold_sparse_path_and_no_densification():
     data = np.array([0.35, 0.6, 0.2, 0.39, 0.8, 0.1])
     A = sp.csr_matrix((data, (rows, cols)), shape=(4, 4))
 
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="distance", sym_op="max")
     out = WeightThreshold(threshold=0.4, mode="distance").apply(G0)
     A2 = out.adj
 

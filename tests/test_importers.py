@@ -19,12 +19,12 @@ def _csr(data, rows, cols, n):
 # ----------------- from_csr / from_dense -----------------
 def test_from_csr_and_from_dense_basic_flags_and_symmetry():
     A = _csr([0.4, 0.9], [0, 1], [1, 0], 2)
-    G1 = from_csr(A, directed=False, weighted=True)
+    G1 = from_csr(A, directed=False, weighted=True, mode="similarity")
     assert not G1.directed and G1.weighted
     assert (G1.adj != G1.adj.T).nnz == 0
 
     D = np.array([[0.0, 0.4], [0.9, 0.0]])
-    G2 = from_dense(D, directed=False, weighted=True)
+    G2 = from_dense(D, directed=False, weighted=True, mode="similarity")
     assert (G1.adj != G2.adj).nnz == 0
 
 
@@ -97,5 +97,5 @@ def test_importers_preserve_directed_flag_and_allow_metadata():
         [0.0, 0.0, 0.0],
     ])
     meta = None  # can replace with a DataFrame; here we just test directed flag
-    G = from_dense(D, directed=True, weighted=True, meta=meta)
+    G = from_dense(D, directed=True, weighted=True, mode="similarity", meta=meta)
     assert G.directed and G.weighted

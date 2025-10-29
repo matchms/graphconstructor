@@ -32,8 +32,10 @@ class KNNSelector(GraphOperator):
     mutual: bool = False
     mutual_k: Optional[int] = None
     mode: Mode = "distance"
+    supported_modes = ["similarity", "distance"]
 
     def apply(self, G: Graph) -> Graph:
+        self._check_mode_supported(G)
         csr = G.adj.tocsr(copy=False)
         n = csr.shape[0]
         largest = (self.mode == "similarity")
@@ -72,6 +74,7 @@ class KNNSelector(GraphOperator):
             A,
             directed=G.directed,
             weighted=G.weighted,
+            mode=self.mode,
             meta=G.meta.copy() if G.meta is not None else None,
             sym_op="max" if not G.directed else "max",
         )

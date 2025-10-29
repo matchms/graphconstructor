@@ -22,7 +22,7 @@ def test_nc_undirected_symmetry_and_monotonicity():
         cols=[1,   2,   2,   3,   0,   4,    1],
         n=5,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     # Larger delta -> sparser backbone
     G_lo = NoiseCorrected(delta=1.0).apply(G0)
@@ -45,7 +45,7 @@ def test_nc_directed_monotonicity_and_no_negatives():
         cols=[1,   2,   2,   3,   0],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=True, weighted=True)
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity")
 
     G1 = NoiseCorrected(delta=1.0).apply(G0)
     G2 = NoiseCorrected(delta=2.0).apply(G0)
@@ -62,15 +62,23 @@ def test_nc_directed_monotonicity_and_no_negatives():
 # ----------------- Negative weights rejected -----------------
 def test_nc_rejects_negative_weights():
     A = _csr([-0.1, 0.4], [0, 1], [1, 0], 2)
-    G0 = Graph.from_csr(A, directed=True, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity", sym_op="max")
     with pytest.raises(ValueError, match="nonnegative"):
+        NoiseCorrected().apply(G0)
+
+
+# ----------------- Distance mode rejected -----------------
+def test_nc_rejects_distances():
+    A = _csr([0.2, 0.5], [0, 1], [1, 0], 2)
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="distance", sym_op="max")
+    with pytest.raises(ValueError, match="only supports modes"):
         NoiseCorrected().apply(G0)
 
 
 # ----------------- All-zero graph: noop -----------------
 def test_nc_all_zero_noop():
     A = sp.csr_matrix((3, 3), dtype=float)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
     G = NoiseCorrected().apply(G0)
     assert G.adj.nnz == 0 and G.adj.shape == (3, 3)
 
@@ -79,7 +87,7 @@ def test_nc_all_zero_noop():
 def test_nc_preserves_flags_and_copies_metadata():
     meta = pd.DataFrame({"name": ["a", "b", "c"], "grp": [1, 0, 1]})
     A = _csr([0.5, 0.3, 0.7], [0, 1, 2], [1, 2, 0], 3)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, meta=meta, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta, sym_op="max")
 
     out = NoiseCorrected(delta=1.64, copy_meta=True).apply(G0)
     assert not out.directed and out.weighted

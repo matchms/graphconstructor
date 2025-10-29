@@ -15,6 +15,10 @@ class DisparityFilter(GraphOperator):
     Disparity Filter backbone (Serrano, Boguñá, Vespignani, 2009).
     Works on nonnegative, real-valued weights; no integer casting needed.
 
+    Input requirements:
+    - mode: "similarity" (higher weights = stronger connections)
+    - weights: continuous, non-negative
+
     Undirected:
         P = A / rowSums(A)
         pval_undirected = min( (1-P)^(k_row-1), (1-P^T)^(k_col-1) )
@@ -37,10 +41,10 @@ class DisparityFilter(GraphOperator):
     copy_meta : bool
         Copy metadata (True) or keep reference (False).
     """
-
     alpha: float = 0.05
     rule: UndirectedRule = "or"
     copy_meta: bool = True
+    supported_modes = ["similarity"]
 
     def _undirected(self, G: Graph) -> Graph:
         A = G.adj.tocsr(copy=False)
@@ -49,6 +53,7 @@ class DisparityFilter(GraphOperator):
         if A.nnz == 0:
             return Graph.from_csr(A.copy(), directed=False, weighted=G.weighted,
                                   meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+                                  mode="similarity",
                                   sym_op="max")
 
         # strengths and degrees (row-wise)
@@ -88,6 +93,7 @@ class DisparityFilter(GraphOperator):
         # Symmetrize to be safe (weights preserved as in input)
         A_f = A_f.maximum(A_f.T)
         return Graph.from_csr(A_f, directed=False, weighted=G.weighted,
+                              mode=G.mode,
                               meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
                               sym_op="max")
 
@@ -127,9 +133,11 @@ class DisparityFilter(GraphOperator):
         keep = np.minimum(pval_out, pval_in) <= self.alpha
         A_f = sp.csr_matrix((w[keep], (rows[keep], cols[keep])), shape=A.shape)
         return Graph.from_csr(A_f, directed=True, weighted=G.weighted,
+                              mode=G.mode,
                               meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta))
 
     def apply(self, G: Graph) -> Graph:
+        self._check_mode_supported(G)
         if G.directed:
             return self._directed(G)
         return self._undirected(G)

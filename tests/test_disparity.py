@@ -21,7 +21,7 @@ def test_disparity_directed_min_out_in_formula():
         cols=[1, 2, 2, 0, 3],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=True, weighted=True)
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity")
 
     s_out = np.asarray(A.sum(axis=1)).ravel()
     s_in = np.asarray(A.sum(axis=0)).ravel()
@@ -64,7 +64,7 @@ def test_disparity_undirected_or_superset_and():
         cols=[1,   2,   2,   3,   0],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     alpha = 0.3
     G_or = DisparityFilter(alpha=alpha, rule="or").apply(G0)
@@ -88,7 +88,7 @@ def test_disparity_undirected_degree1_not_always_kept_for_tiny_alpha():
         cols=[1,   2,   3],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     out = DisparityFilter(alpha=1e-6, rule="or").apply(G0)
     # It's valid that (0,1) may be dropped at tiny alpha; the test asserts only that
@@ -100,7 +100,7 @@ def test_disparity_undirected_degree1_not_always_kept_for_tiny_alpha():
 # ----------------- Negative weights rejected -----------------
 def test_disparity_rejects_negative_weights():
     A = _csr([-0.5, 0.2], [0, 1], [1, 0], 2)
-    G0 = Graph.from_csr(A, directed=True, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity", sym_op="max")
     with pytest.raises(ValueError, match="nonnegative"):
         DisparityFilter(alpha=0.1).apply(G0)
 
@@ -109,7 +109,7 @@ def test_disparity_rejects_negative_weights():
 def test_disparity_preserves_flags_and_copies_metadata():
     meta = pd.DataFrame({"name": ["a", "b", "c"], "grp": [1, 0, 1]})
     A = _csr([0.6, 0.4, 0.7], [0, 1, 2], [1, 2, 0], 3)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, meta=meta, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta, sym_op="max")
 
     out = DisparityFilter(alpha=0.2, rule="or", copy_meta=True).apply(G0)
     assert not out.directed and out.weighted

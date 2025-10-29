@@ -43,10 +43,10 @@ class LocallyAdaptiveSparsification(GraphOperator):
         If True, copy metadata frame onto the result graph.
 
     """
-
     alpha: float = 0.05
     rule: UndirectedRule = "or"
     copy_meta: bool = True
+    supported_modes = ["similarity"]
 
     # ---- helpers ----
     @staticmethod
@@ -129,6 +129,7 @@ class LocallyAdaptiveSparsification(GraphOperator):
 
         return Graph.from_csr(
             A_kept, directed=True, weighted=G.weighted,
+            mode=G.mode,
             meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta)
         )
 
@@ -139,6 +140,7 @@ class LocallyAdaptiveSparsification(GraphOperator):
         if A.nnz == 0:
             return Graph.from_csr(
                 A.copy(), directed=False, weighted=G.weighted,
+                mode=G.mode,
                 meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
                 sym_op="max",
             )
@@ -161,11 +163,13 @@ class LocallyAdaptiveSparsification(GraphOperator):
 
         return Graph.from_csr(
             A_kept, directed=False, weighted=G.weighted,
+            mode=G.mode,
             meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
             sym_op="max",
         )
 
     def apply(self, G: Graph) -> Graph:
+        self._check_mode_supported(G)
         if G.directed:
             return self._apply_directed(G)
         return self._apply_undirected(G)

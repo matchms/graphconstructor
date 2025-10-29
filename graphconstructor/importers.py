@@ -7,12 +7,12 @@ from .utils import _coerce_knn_inputs
 
 Mode = Literal["distance", "similarity"]
 
-def from_dense(arr, *, directed=False, weighted=True, meta=None, sym_op="max") -> Graph:
-    return Graph.from_dense(arr, directed=directed, weighted=weighted, meta=meta, sym_op=sym_op)
+def from_dense(arr, mode, *, directed=False, weighted=True, meta=None, sym_op="max") -> Graph:
+    return Graph.from_dense(arr, directed=directed, weighted=weighted, mode=mode, meta=meta, sym_op=sym_op)
 
 
-def from_csr(adj, *, directed=False, weighted=True, meta=None, sym_op="max") -> Graph:
-    return Graph.from_csr(adj, directed=directed, weighted=weighted, meta=meta, sym_op=sym_op)
+def from_csr(adj, mode, *, directed=False, weighted=True, meta=None, sym_op="max") -> Graph:
+    return Graph.from_csr(adj, directed=directed, weighted=weighted, mode=mode, meta=meta, sym_op=sym_op)
 
 
 def from_knn(indices, distances, *, store_weights=True, directed=False, meta=None, sym_op="max") -> Graph:
@@ -33,7 +33,8 @@ def from_knn(indices, distances, *, store_weights=True, directed=False, meta=Non
     # Infer full graph size from neighbor ids
     n_full = _infer_n_from_indices(ind)
     A = sp.csr_matrix((weights, (rows, cols)), shape=(n_full, n_full))
-    return Graph.from_csr(A, directed=directed, weighted=store_weights, meta=meta, sym_op=sym_op)
+    return Graph.from_csr(A, directed=directed, weighted=store_weights, mode="distance",
+                          meta=meta, sym_op=sym_op)
 
 
 def from_ann(ann, query_data, k: int, *, store_weights=True, directed=False, meta=None, sym_op="max") -> Graph:
@@ -45,7 +46,8 @@ def from_ann(ann, query_data, k: int, *, store_weights=True, directed=False, met
         if query_data is None:
             raise TypeError("from_ann requires query_data when index has no cached neighbors.")
         ind, dist = idx.query(query_data, k=k)
-    return from_knn(ind, dist, store_weights=store_weights, directed=directed, meta=meta, sym_op=sym_op)
+    return from_knn(ind, dist, store_weights=store_weights, directed=directed,
+                    meta=meta, sym_op=sym_op)
 
 
 # helper functions ---------------------------------------------

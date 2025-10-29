@@ -25,7 +25,7 @@ def test_doubly_stochastic_converges_on_positive_dense():
     # Zero the diagonal (typical adjacency semantics)
     np.fill_diagonal(M, 0.0)
 
-    G0 = Graph.from_dense(M, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_dense(M, directed=False, weighted=True, mode="similarity", sym_op="max")
     op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
 
@@ -52,7 +52,7 @@ def test_doubly_stochastic_sparse_with_isolates():
         cols=[1, 2, 2, 3, 3, 2],
         n=5,
     )
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
     op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
@@ -91,7 +91,7 @@ def test_doubly_stochastic_directed_graph_unsolvable():
         cols=[1, 2, 2, 0, 3, 1],
         n=4,
     )
-    G0 = Graph.from_csr(A, directed=True, weighted=True)
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity")
 
     op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
@@ -115,19 +115,24 @@ def test_doubly_stochastic_directed_graph_unsolvable():
 # ----------------- Error cases -----------------
 def test_doubly_stochastic_rejects_negative_weights():
     A = _csr([-0.2, 0.5], [0, 1], [1, 0], 2)
-    G0 = Graph.from_csr(A, directed=True, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity", sym_op="max")
     op = DoublyStochastic()
     with pytest.raises(ValueError, match="nonnegative"):
         op.apply(G0)
 
 
-# (We cannot test non-square here because Graph.from_csr enforces square on construction.)
+def test_doubly_stochastic_rejects_distances():
+    A = _csr([0.2, 0.5], [0, 1], [1, 0], 2)
+    G0 = Graph.from_csr(A, directed=True, weighted=True, mode="distance", sym_op="max")
+    op = DoublyStochastic()
+    with pytest.raises(ValueError, match="only supports modes"):
+        op.apply(G0)
 
 
 # ----------------- Trivial all-zero matrix: returned unchanged -----------------
 def test_doubly_stochastic_all_zero_matrix_noop():
     A = sp.csr_matrix((4, 4), dtype=float)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
     op = DoublyStochastic()
     G = op.apply(G0)
     assert G.adj.nnz == 0
@@ -139,7 +144,7 @@ def test_doubly_stochastic_all_zero_matrix_noop():
 def test_doubly_stochastic_preserves_flags_and_copies_metadata():
     meta = pd.DataFrame({"name": ["a", "b", "c"], "group": [1, 0, 1]})
     A = _csr([0.4, 0.6, 0.3], [0, 1, 2], [1, 2, 0], 3)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, meta=meta, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta, sym_op="max")
 
     op = DoublyStochastic(tolerance=1e-6, max_iter=10_000, copy_meta=True)
     G = op.apply(G0)
