@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterable, Literal, Sequence
+from typing import Iterable, Literal, Sequence, Optional
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
@@ -33,19 +33,18 @@ class Graph:
     weighted: bool
     mode: str
     meta: pd.DataFrame | None = None
-    ignore_selfloops: bool = None
-    keep_explicit_zeros: bool = None
+    ignore_selfloops: Optional[bool] = None
+    keep_explicit_zeros: Optional[bool] = None
 
     def __post_init__(self):
-        # Default: ignore self-loops for undirected graphs
-        if self.ignore_selfloops is None:
-            self.ignore_selfloops = not self.directed
-        # Default: keep explicit zeros for distance graphs
-        if self.keep_explicit_zeros is None:
-            self.keep_explicit_zeros = self.mode == "distance"
         # Check mode
         if self.mode not in {"distance", "similarity"}:
             raise ValueError("mode must be 'distance' or 'similarity'.")
+        # Set default parameters (if None)
+        self.ignore_selfloops, self.keep_explicit_zeros = self._handle_default_parameters(
+            self.ignore_selfloops, self.directed, self.keep_explicit_zeros, self.mode
+        )
+
 
     # -------- Construction helpers --------
     @staticmethod
@@ -91,33 +90,43 @@ class Graph:
             B = Graph._preserve_explicit_zeros(preserve_zeros_from, B)
         return B
 
-    @classmethod
-    def from_csr(
-        cls,
-        adj: sp.spmatrix | np.ndarray,
-        mode: str,
-        *,
-        directed: bool = False,
-        weighted: bool = True,
-        meta: pd.DataFrame | None = None,
-        ignore_selfloops: bool = None,
-        keep_explicit_zeros: bool = None,
-        sym_op: SymOp = "max",
-        copy: bool = False,
-    ) -> "Graph":
-
-        # Ignore self-loops (unless directed or specified otherwise)
+    @staticmethod
+    def _handle_default_parameters(ignore_selfloops, directed, keep_explicit_zeros, mode):
+        """Set default parameters based on graph properties."""
         if ignore_selfloops is None:
             ignore_selfloops = not directed
-        # Keep explicit zeros (unless similarity or specified otherwise)
         if keep_explicit_zeros is None:
             keep_explicit_zeros = mode == "distance"
+        return ignore_selfloops, keep_explicit_zeros
+
+    @classmethod
+    def from_csr(
+            cls,
+            adj: sp.spmatrix | np.ndarray,
+            mode: str,
+            *,
+            directed: bool = False,
+            weighted: bool = True,
+            meta: pd.DataFrame | None = None,
+            ignore_selfloops: bool = None,
+            keep_explicit_zeros: bool = None,
+            sym_op: SymOp = "max",
+            copy: bool = False,
+        ) -> "Graph":
+        """Build from a CSR adjacency matrix. For undirected=True, the matrix is symmetrized."""
+
+        # Set default parameters (if None)
+        ignore_selfloops, keep_explicit_zeros = cls._handle_default_parameters(
+            ignore_selfloops, directed, keep_explicit_zeros, mode
+        )
 
         A = cls._ensure_csr(adj)
         if not weighted:
             if not copy and sp.issparse(adj):
                 A = A.copy()
             A.data[:] = 1.0
+
+        # Only symmetrize if undirected
         if not directed:
             preserve_src = A if keep_explicit_zeros else None
             A = cls._symmetrize(A, how=sym_op, preserve_zeros_from=preserve_src)
@@ -142,36 +151,34 @@ class Graph:
 
     @classmethod
     def from_dense(
-        cls,
-        adj: np.ndarray,
-        mode: str,
-        **kwargs,
-    ) -> "Graph":
-        return cls.from_csr(adj, mode=mode, **kwargs)
+            cls,
+            adj: np.ndarray,
+            mode: str,
+            **kwargs,
+        ) -> "Graph":
+            return cls.from_csr(adj, mode=mode, **kwargs)
 
     @classmethod
     def from_edges(
-        cls,
-        n: int,
-        edges: Sequence[tuple[int, int]] | np.ndarray,
-        mode: str,
-        weights: Sequence[float] | np.ndarray | None = None,
-        *,
-        directed: bool = False,
-        weighted: bool = True,
-        meta: pd.DataFrame | None = None,
-        ignore_selfloops: bool = None,
-        keep_explicit_zeros: bool = None,
-        sym_op: SymOp = "max",
-    ) -> "Graph":
+            cls,
+            n: int,
+            edges: Sequence[tuple[int, int]] | np.ndarray,
+            mode: str,
+            weights: Sequence[float] | np.ndarray | None = None,
+            *,
+            directed: bool = False,
+            weighted: bool = True,
+            meta: pd.DataFrame | None = None,
+            ignore_selfloops: Optional[bool] = None,
+            keep_explicit_zeros: Optional[bool] = None,
+            sym_op: SymOp = "max",
+        ) -> "Graph":
         """Build from an edge list. For undirected=True, we symmetrize later."""
 
-        # Ignore self-loops (unless directed or specified otherwise)
-        if ignore_selfloops is None:
-            ignore_selfloops = not directed
-        # Keep explicit zeros (unless similarity or specified otherwise)
-        if keep_explicit_zeros is None:
-            keep_explicit_zeros = mode == "distance"
+        # Set default parameters (if None)
+        ignore_selfloops, keep_explicit_zeros = cls._handle_default_parameters(
+            ignore_selfloops, directed, keep_explicit_zeros, mode
+        )
 
         if isinstance(edges, np.ndarray):
             if edges.ndim != 2 or edges.shape[1] != 2:
