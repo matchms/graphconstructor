@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterable, Literal, Sequence, Optional
+from typing import Iterable, Literal, Optional, Sequence
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
