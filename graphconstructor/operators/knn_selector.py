@@ -76,5 +76,4 @@ class KNNSelector(GraphOperator):
             weighted=G.weighted,
             mode=self.mode,
             meta=G.meta.copy() if G.meta is not None else None,
-            sym_op="max" if not G.directed else "max",
         )

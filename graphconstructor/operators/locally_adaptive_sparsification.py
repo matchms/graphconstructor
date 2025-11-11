@@ -63,7 +63,6 @@ class LocallyAdaptiveSparsification(GraphOperator):
 
         # out-strengths s_i and degrees k_i
         s_out = np.asarray(A.sum(axis=1)).ravel()
-        #k_out = np.diff(indptr)
 
         pvals = np.empty_like(data, dtype=float)
 
