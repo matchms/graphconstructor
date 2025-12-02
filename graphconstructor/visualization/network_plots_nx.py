@@ -42,7 +42,7 @@ def plot_graph_by_feature(
     attribute_type : str
         'categorical' or 'continuous'. This will determine the legend used.
     pos : dict or None
-        Optional positions dict; if None, uses nx.spring_layout.
+        Optional positions dict; if None, uses Kamada Kawai algorithm.
     cmap : str
         Matplotlib colormap (e.g., 'tab20' for categorical, 'viridis' for continuous).
     default_color : str
@@ -122,7 +122,8 @@ def plot_graph_by_feature(
         edge_weights = [d.get("weight", 1.0) for _, _, d in nxG.edges(data=True)]
         if edge_weights:
             max_weight = max(edge_weights)
-            edge_widths = [0.5 + 5.0 * (w / max_weight) for w in edge_weights]
+            min_weight = min(edge_weights)
+            edge_widths = [0.5 + 5.0 * ((w - min_weight) / (max_weight - min_weight)) for w in edge_weights]
             edge_colors = [cm.Greys(w / max_weight) for w in edge_weights]
         else:
             edge_widths = 1.0
@@ -137,7 +138,7 @@ def plot_graph_by_feature(
 
     # Layout
     if pos is None:
-        pos = nx.spring_layout(nxG, seed=42)
+        pos = nx.kamada_kawai_layout(nxG)
 
     # Figure size
     size = (len(node_list) ** 0.5)
