@@ -212,6 +212,107 @@ class Graph:
             keep_explicit_zeros=keep_explicit_zeros,
             )
 
+    @classmethod
+    def from_graphml(
+        cls,
+        path,
+        *,
+        default_mode: str = "similarity",
+    ) -> "Graph":
+        """
+        Load a Graph from a GraphML file.
+
+        Parameters
+        ----------
+        path
+            File path or file-like object accepted by networkx.read_graphml.
+        default_mode
+            Fallback value for the Graph's mode if it is not stored in the
+            GraphML file. Must be either 'distance' or 'similarity'.
+
+        Notes
+        -----
+        - Uses networkx.read_graphml under the hood.
+        - Edge weights are taken from the 'weight' attribute, if present.
+        - Node attributes become columns of the metadata DataFrame.
+        - Graph-level attributes 'mode', 'directed', 'weighted',
+          'ignore_selfloops', and 'keep_explicit_zeros' are honored if present.
+        """
+        try:
+            import networkx as nx  # lazy import
+        except Exception as e:
+            raise ImportError("networkx is required for from_graphml().") from e
+
+        if default_mode not in {"distance", "similarity"}:
+            raise ValueError(
+                f"default_mode must be 'distance' or 'similarity', got '{default_mode}'."
+            )
+
+        G_nx = nx.read_graphml(path)
+
+        # Node ordering: preserve whatever order networkx gives us
+        nodes = list(G_nx.nodes())
+        n = len(nodes)
+
+        # Directedness from the networkx graph
+        directed = G_nx.is_directed()
+
+        # Build adjacency; we assume 'weight' attribute for weighted graphs.
+        # If some edges have no 'weight', networkx will treat them with default=1.0.
+        A = nx.to_scipy_sparse_array(
+            G_nx,
+            nodelist=nodes,
+            dtype=float,
+            weight="weight",
+        ).tocsr()
+
+        # Graph-level attributes (if present)
+        mode = G_nx.graph.get("mode", default_mode)
+        if mode not in {"distance", "similarity"}:
+            raise ValueError(
+                f"GraphML contains invalid or unsupported mode '{mode}'. "
+                "Expected 'distance' or 'similarity'."
+            )
+
+        # Weighted flag: prefer stored graph attribute; otherwise infer
+        weighted_attr = G_nx.graph.get("weighted", None)
+        if weighted_attr is not None:
+            weighted = bool(weighted_attr)
+        else:
+            # Fallback: if there are any edges, assume weighted=True
+            weighted = G_nx.number_of_edges() > 0
+
+        ignore_selfloops = G_nx.graph.get("ignore_selfloops", None)
+        keep_explicit_zeros = G_nx.graph.get("keep_explicit_zeros", None)
+
+        # Node attributes -> metadata DataFrame
+        # Collect union of all attribute keys
+        all_cols = set()
+        for _, attrs in G_nx.nodes(data=True):
+            all_cols.update(attrs.keys())
+        all_cols = sorted(all_cols)
+
+        if n > 0 and all_cols:
+            rows = []
+            for node in nodes:
+                attrs = G_nx.nodes[node]
+                row = {col: attrs.get(col, None) for col in all_cols}
+                rows.append(row)
+            meta = pd.DataFrame(rows)
+        else:
+            meta = None
+
+        # Build Graph via from_csr to respect the usual symmetrization / defaults
+        return cls.from_csr(
+            A,
+            mode=mode,
+            directed=directed,
+            weighted=weighted,
+            meta=meta,
+            ignore_selfloops=ignore_selfloops,
+            keep_explicit_zeros=keep_explicit_zeros,
+        )
+
     # -------- Core properties --------
     @property
     def n_nodes(self) -> int:
@@ -380,6 +481,36 @@ class Graph:
             for col in self.meta.columns:
                 g.vs[col] = self.meta[col].tolist()
         return g
+
+    def to_graphml(self, path, *, include_graph_attrs: bool = True) -> None:
+        """
+        Export the graph to a GraphML file.
+
+        Parameters
+        ----------
+        path
+            File path or file-like object accepted by networkx.write_graphml.
+        include_graph_attrs
+            If True (default), store graph-level attributes such as
+            'mode', 'directed', 'weighted', 'ignore_selfloops',
+            and 'keep_explicit_zeros' in the GraphML file.
+        """
+        try:
+            import networkx as nx  # lazy import
+        except Exception as e:
+            raise ImportError("networkx is required for to_graphml().") from e
+
+        G_nx = self.to_networkx()
+
+        if include_graph_attrs:
+            G_nx.graph["mode"] = self.mode
+            G_nx.graph["directed"] = bool(self.directed)
+            G_nx.graph["weighted"] = bool(self.weighted)
+            # These can be None; GraphML will still store them as data keys
+            G_nx.graph["ignore_selfloops"] = self.ignore_selfloops
+            G_nx.graph["keep_explicit_zeros"] = self.keep_explicit_zeros
+
+        nx.write_graphml(G_nx, path)
 
     # -------- Utilities --------
     def copy(self) -> "Graph":
