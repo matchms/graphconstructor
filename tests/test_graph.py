@@ -365,6 +365,119 @@ def test_to_networkx_types_and_node_attributes():
     assert pytest.approx(nxG[0][1]["weight"]) == G.adj[0, 1]
 
 
+@pytest.mark.skipif(not HAS_NX, reason="networkx not installed")
+def test_graphml_roundtrip_undirected_with_meta(tmp_path, S_dense, meta_df):
+    """Round-trip via GraphML for undirected, weighted graph with metadata."""
+    G = Graph.from_dense(
+        S_dense,
+        directed=False,
+        weighted=True,
+        mode="similarity",
+        meta=meta_df,
+    )
+    path = tmp_path / "graph_undirected.graphml"
+
+    # Export to GraphML
+    G.to_graphml(path)
+
+    # Import back
+    G2 = Graph.from_graphml(path)
+
+    assert G2.n_nodes == G.n_nodes
+    assert G2.directed == G.directed
+    assert G2.weighted == G.weighted
+    assert G2.mode == G.mode
+
+    # Adjacency must be equal
+    np.testing.assert_array_almost_equal(G2.adj.toarray(), G.adj.toarray())
+
+    # Metadata should be preserved (content-wise)
+    assert G2.meta is not None
+
+    # Compare metadata ignoring column order and dtype
+    meta1 = G2.meta.reindex(sorted(G2.meta.columns), axis=1).reset_index(drop=True)
+    meta2 = G.meta.reindex(sorted(G.meta.columns), axis=1).reset_index(drop=True)
+    pd.testing.assert_frame_equal(meta1, meta2, check_dtype=False)
+
+
+@pytest.mark.skipif(not HAS_NX, reason="networkx not installed")
+def test_graphml_roundtrip_directed(tmp_path):
+    """Round-trip via GraphML for a directed weighted graph."""
+    A = _csr([1.0, 2.0, 3.0], [0, 1, 2], [1, 2, 0], 3)
+    G = Graph.from_csr(A, directed=True, weighted=True, mode="distance")
+    path = tmp_path / "graph_directed.graphml"
+
+    G.to_graphml(path)
+    G2 = Graph.from_graphml(path)
+
+    assert G2.n_nodes == G.n_nodes
+    assert G2.directed is True
+    assert G2.weighted is True
+    assert G2.mode == "distance"
+    np.testing.assert_array_almost_equal(G2.adj.toarray(), G.adj.toarray())
+
+
+@pytest.mark.skipif(not HAS_NX, reason="networkx not installed")
+def test_from_graphml_uses_default_mode_when_missing(tmp_path):
+    """
+    Importing GraphML created directly by networkx without a 'mode' attribute
+    should fall back to default_mode.
+    """
+    import networkx as nx
+
+    G_nx = nx.Graph()
+    G_nx.add_edge(0, 1, weight=1.5)
+    path = tmp_path / "no_mode.graphml"
+    nx.write_graphml(G_nx, path)
+
+    # No 'mode' in graph attributes, so default_mode is used
+    G = Graph.from_graphml(path, default_mode="distance")
+    assert G.mode == "distance"
+    assert not G.directed
+    assert G.weighted
+    assert G.n_nodes == 2
+    np.testing.assert_array_almost_equal(
+        G.adj.toarray(),
+        np.array([[0.0, 1.5], [1.5, 0.0]], dtype=float),
+    )
+
+
+@pytest.mark.skipif(not HAS_NX, reason="networkx not installed")
+def test_from_graphml_builds_metadata_from_node_attributes(tmp_path):
+    """
+    Node attributes in a GraphML file should become meta columns in Graph.
+    """
+    import networkx as nx
+
+    G_nx = nx.Graph()
+    G_nx.add_node(0, name="a", group=1)
+    G_nx.add_node(1, name="b", group=2)
+    G_nx.add_edge(0, 1, weight=2.0)
+
+    path = tmp_path / "with_node_attrs.graphml"
+    nx.write_graphml(G_nx, path)
+
+    G = Graph.from_graphml(path, default_mode="similarity")
+
+    assert G.n_nodes == 2
+    assert G.meta is not None
+    assert list(G.meta.columns) == ["group", "name"] or sorted(G.meta.columns) == ["group", "name"]
+    # Check content, ignoring column order and dtype
+    meta_sorted = G.meta.reindex(sorted(G.meta.columns), axis=1)
+    expected = pd.DataFrame({"name": ["a", "b"], "group": [1, 2]})
+    expected_sorted = expected.reindex(sorted(expected.columns), axis=1)
+    pd.testing.assert_frame_equal(
+        meta_sorted.reset_index(drop=True),
+        expected_sorted,
+        check_dtype=False,
+    )
+    # adjacency matches the edge
+    np.testing.assert_array_almost_equal(
+        G.adj.toarray(),
+        np.array([[0.0, 2.0], [2.0, 0.0]], dtype=float),
+    )
+
+
 @pytest.mark.skipif(not HAS_IG, reason="python-igraph not installed")
 def test_to_igraph_types_and_attributes():
     A = _csr([0.2, 0.9, 0.3], [0, 1, 2], [1, 2, 0], 3)
@@ -380,6 +493,7 @@ def test_to_igraph_types_and_attributes():
     assert igG.vs["label"] == [10, 20, 30]
     # edge weights exist
     assert "weight" in igG.es.attributes()
+
 
 
 # ----------------- Distance/similarity conversion -----------------
