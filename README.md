@@ -43,6 +43,8 @@ This will usually be followed by a custom combination of one or multiple **opera
     **k-Nearest Neighrbor (KNN)** based edge selections. This will keep only top-*k* neighbors per node. Optionally, it requires **mutual** edges using top-`mutual_k`.
   * `WeightThreshold(threshold, mode="distance"|"similarity")`  
     Basic (or "naive") sparsification algorithm that simply applies a **global weight threshold**. Only edges with weight `< threshold` (distance) or `> threshold` (similarity) will be kept.
+  * `MinimumSpanningTree()`  
+    This is another fundamental algorithm to reduce graph connectivity which can be slow for large and highly-connected graphs, though. Currently the implementation is in essence using the scipy-implementation under the hood.
   * `DoublyStochastic(tolerance=1e-5, max_iter=10000)`  
     **Sinkhorn–Knopp** alternating row/column normalization to make the adjacency (approximately) **doubly stochastic** without densifying (CSR-only). Can be useful as a normalization step before backboning/thresholding.  
     Ref: Sinkhorn (1964); discussed in Coscia, "The Atlas for the Inspiring Network Scientist" (2025).
@@ -112,9 +114,15 @@ G_refined = NoiseCorrected().apply(G0_sim)
 ```
 
 
-### 3) Export when needed
+### 3) Convert or export when needed
 
+`graphconstructor.Graph` objects can easily be converted to networkx or igraph central objects:
 ```python
 nx_graph = G_pruned.to_networkx()   # nx.Graph or nx.DiGraph
 ig_graph = G_pruned.to_igraph()     # igraph.Graph
+```
+
+Graphs can also be exported to **graphml**:
+```python
+G_pruned.to_graphml("test_graph.graphml")
 ```
