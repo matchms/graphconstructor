@@ -32,13 +32,13 @@ class MinimumSpanningTree(GraphOperator):
     # Distance: classical MST; Similarity: maximum spanning tree
     supported_modes = ["distance", "similarity"]
 
-    def _mst_from_distance_adj(self, A: sp.csr_matrix) -> sp.csr_matrix:
+    def _mst_distance_adj(self, A: sp.csr_matrix) -> sp.csr_matrix:
         """MST for distance graphs (minimize total weight)."""
         # SciPy returns a sparse matrix with only the tree edges (usually upper tri)
         mst = minimum_spanning_tree(A)
         return mst.tocsr()
 
-    def _mst_for_similarity(self, A: sp.csr_matrix) -> sp.csr_matrix:
+    def _mst_similarity(self, A: sp.csr_matrix) -> sp.csr_matrix:
         """
         Maximum spanning tree for similarity graphs.
 
@@ -46,30 +46,19 @@ class MinimumSpanningTree(GraphOperator):
         minimum spanning tree on the costs, and then restore the original
         similarity weights on the selected edges.
         """
-        coo = A.tocoo(copy=False)
-        if coo.nnz == 0:
-            # Degenerate: no edges
+        if A.nnz == 0:
+            # No edges -> return empty adjacency
             return A.copy() * 0.0
 
-        data = coo.data
-        max_w = data.max()
-        # Larger similarity -> smaller cost
-        cost = (max_w - data).astype(float, copy=False)
+        # Negative weights: minimizing sum(-w) == maximizing sum(w)
+        cost_adj = (-A).tocsr()
+        mst_cost = minimum_spanning_tree(cost_adj)
+        mst_cost = mst_cost.tocsr()
 
-        cost_adj = sp.csr_matrix((cost, (coo.row, coo.col)), shape=A.shape)
-        mst_cost = minimum_spanning_tree(cost_adj).tocoo()
+        # Mask of selected edges (positions where mst_cost is non-zero)
+        mask = mst_cost.astype(bool).astype(float)
 
-        if mst_cost.nnz == 0:
-            # Should not happen for a connected graph, but be defensive
-            return A.copy() * 0.0
-
-        # Build a mask adjacency for tree edges
-        mask = sp.csr_matrix(
-            (np.ones_like(mst_cost.data, dtype=float),
-             (mst_cost.row, mst_cost.col)),
-            shape=A.shape,
-        )
-        # Keep original similarities on the tree edges only
+        # Recover original similarities on those edges
         tree = A.multiply(mask)
         return tree.tocsr()
 
@@ -92,12 +81,9 @@ class MinimumSpanningTree(GraphOperator):
         A = G.adj.tocsr(copy=False)
 
         if G.mode == "distance":
-            mst_adj = self._mst_from_distance_adj(A)
-        elif G.mode == "similarity":
-            mst_adj = self._mst_for_similarity(A)
-        else:
-            # Should be covered by _check_mode_supported, but keep explicit
-            raise ValueError(f"Unsupported graph mode '{G.mode}'.")
+            mst_adj = self._mst_distance_adj(A)
+        if G.mode == "similarity":
+            mst_adj = self._mst_similarity(A)
 
         # For undirected graphs, SciPy's MST is usually upper-triangular; letting
         # Graph.from_csr(sym_op='max') symmetrize is enough.
