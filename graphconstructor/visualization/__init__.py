@@ -1,9 +1,9 @@
 from .graph_statistics import plot_degree_distribution, plot_degree_distributions_grid
-from .network_plots_nx import plot_graph_by_class
+from .network_plots_nx import plot_graph_by_feature
 
 
 __all__ = [
     "plot_degree_distribution",
     "plot_degree_distributions_grid",
-    "plot_graph_by_class",
+    "plot_graph_by_feature",
 ]
