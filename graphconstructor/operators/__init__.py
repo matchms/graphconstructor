@@ -7,6 +7,7 @@ from .marginal_likelihood import MarginalLikelihoodFilter
 from .minimum_spanning_tree import MinimumSpanningTree
 from .noise_corrected import NoiseCorrected
 from .weight_threshold import WeightThreshold
+from .metric_distance import MetricDistanceFilter
 
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "KNNSelector",
     "LocallyAdaptiveSparsification",
     "MarginalLikelihoodFilter",
+    "MetricDistanceFilter",
     "MinimumSpanningTree",
     "NoiseCorrected",
     "WeightThreshold",
