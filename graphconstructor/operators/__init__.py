@@ -7,6 +7,7 @@ from .marginal_likelihood import MarginalLikelihoodFilter
 from .minimum_spanning_tree import MinimumSpanningTree
 from .noise_corrected import NoiseCorrected
 from .weight_threshold import WeightThreshold
+from .enhanced_configuration_model import EnhancedConfigurationModelFilter
 
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "MinimumSpanningTree",
     "NoiseCorrected",
     "WeightThreshold",
+    "EnhancedConfigurationModelFilter",
 ]
