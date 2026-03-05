@@ -24,11 +24,11 @@ def _log(x):
 
 @njit(cache=True)
 def _softplus(x):
-    return np.log1p(np.exp(x))
+    return np.log1p(np.exp(-np.abs(x))) + np.maximum(x, 0.0)  # avoids overflows for large x
 
 @njit(cache=True)
 def _softplus_inv(x):
-    return np.log(np.exp(x) - 1.0)
+    return np.log(np.expm1(x))  # avoids unstability near 0
 
 R_to_zero_to_inf = [
     (_exp, _log),
@@ -99,35 +99,33 @@ def _neg_log_likelihood_grad(x, y, k, s):
     parameters (x, y).  Derived by differentiating formula (13).
     """
     N = len(x)
+    grad_x = np.empty(N, dtype=np.float64)
+    grad_y = np.empty(N, dtype=np.float64)
 
-    grad_x = np.zeros(N)
-    grad_y = np.zeros(N)
-
-    # Terms from k·log(x) and s·log(y)
+    # Base terms: -k_i/x_i and -s_i/y_i
     for i in range(N):
         grad_x[i] = -k[i] / x[i]
         grad_y[i] = -s[i] / y[i]
 
-    # Terms from the double sum over unique pairs (i > j)
+    # Pair contributions for i>j
     for i in range(N):
         for j in range(i):
-            xx = x[i] * x[j]
             yy = y[i] * y[j]
-            denom = 1.0 - yy + xx * yy   # = 1 - yy(1 - xx)
+            xx = x[i] * x[j]
+            D = 1.0 - yy + xx * yy
 
-            # d/dx_i of log((1-yy)/denom) = -xx*yy / (denom * x[i])
-            # (same structure for x_j by symmetry)
-            factor_x = xx * yy / (denom * (1.0 - yy + xx * yy))
-            grad_x[i] += factor_x / x[i]
-            grad_x[j] += factor_x / x[j]
+            # x-grad from +log(D)
+            # d/dx_i log(D) = (yy * x_j)/D
+            grad_x[i] += (yy * x[j]) / D
+            grad_x[j] += (yy * x[i]) / D
 
-            # d/dy_i of log((1-yy)/denom)
-            # numerator deriv: -y[j] / (1-yy)  — but sign flips with -log
-            # denom deriv:     (-y[j] + xx*y[j]) / denom
-            # combined (negated for NLL):
-            factor_y = (y[j] / (1.0 - yy)) - ((-1.0 + xx) * y[j] / denom)
-            grad_y[i] += factor_y
-            grad_y[j] += factor_y * y[i] / y[j]   # symmetric
+            # y-grad from -log(1-yy) + log(D)
+            inv1m = 1.0 / (1.0 - yy)         # for -log(1-yy) term
+            invD  = 1.0 / D                  # for log(D) term
+            common = (xx - 1.0) * invD       # multiplier for y-derivative of log(D)
+
+            grad_y[i] += y[j] * inv1m + y[j] * common
+            grad_y[j] += y[i] * inv1m + y[i] * common
 
     return grad_x, grad_y
 
@@ -287,7 +285,7 @@ class EnhancedConfigurationModelFilter(GraphOperator):
         y_opt = y_transform(res.x[num_nodes:])
 
         # Work only on the lower triangle to avoid double computation
-        W_lower = sp.tril(W).tocoo()
+        W_lower = sp.tril(W, k=-1).tocoo()
         row = W_lower.row.astype(np.int64)
         col = W_lower.col.astype(np.int64)
         weights = W_lower.data
