@@ -3,11 +3,24 @@ import pytest
 import scipy.sparse as sp
 from graphconstructor import Graph
 from graphconstructor.operators import EnhancedConfigurationModelFilter
+from graphconstructor.operators.enhanced_configuration_model import _neg_log_likelihood, _neg_log_likelihood_grad
 
 
 def _csr(*, data, rows, cols, n):
     """Small helper to build CSR adjacency."""
     return sp.csr_matrix((data, (rows, cols)), shape=(n, n))
+
+
+def _central_diff_grad(f, z, h=1e-6):
+    """Central-difference gradient for 1D numpy arrays."""
+    g = np.zeros_like(z, dtype=np.float64)
+    for i in range(z.size):
+        zp = z.copy()
+        zm = z.copy()
+        zp[i] += h
+        zm[i] -= h
+        g[i] = (f(zp) - f(zm)) / (2.0 * h)
+    return g
 
 
 def test_ecm_rejects_directed_graph():
@@ -132,3 +145,34 @@ def test_ecm_reproducible_given_fixed_seed():
     assert np.array_equal(W1.indices, W2.indices)
     assert np.array_equal(W1.indptr, W2.indptr)
     assert np.allclose(W1.data, W2.data, rtol=1e-8, atol=1e-10)
+
+
+@pytest.mark.parametrize("N", [4, 6])
+def test_neg_log_likelihood_grad_matches_finite_differences(N):
+    rng = np.random.default_rng(0)
+
+    # Make bounded parameters safely away from problematic edges
+    x = rng.uniform(0.2, 2.0, size=N).astype(np.float64)     # x > 0
+    y = rng.uniform(0.05, 0.95, size=N).astype(np.float64)   # 0 < y < 1
+
+    # Dummy constraints (must be nonnegative; avoid zeros to keep logs happy)
+    k = rng.integers(1, 5, size=N).astype(np.float64)
+    s = rng.uniform(0.5, 5.0, size=N).astype(np.float64)
+
+    # Wrap objective as function of concatenated z = [x, y]
+    def f(z):
+        xx = z[:N]
+        yy = z[N:]
+        return float(_neg_log_likelihood(xx, yy, k, s))
+
+    z0 = np.concatenate([x, y])
+
+    # Finite-diff reference
+    g_fd = _central_diff_grad(f, z0, h=1e-6)
+
+    # Analytic gradient under test
+    gx, gy = _neg_log_likelihood_grad(x, y, k, s)
+    g_an = np.concatenate([gx, gy])
+
+    # Compare with reasonable tolerances (FD is noisy; tighten once stable)
+    np.testing.assert_allclose(g_an, g_fd, rtol=1e-4, atol=1e-5)
