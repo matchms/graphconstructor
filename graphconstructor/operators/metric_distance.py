@@ -45,7 +45,9 @@ class MetricDistanceFilter(GraphOperator):
         return svals
         
     def _directed_filter(self, G: Graph) -> Graph:
-        pass
+        raise NotImplementedError(
+            "MetricDistanceFilter is defined only for undirected graphs."
+        )
         
     def _undirected_filter(self, D):          
         disjunction = sum

@@ -1,6 +1,7 @@
 import numpy as np
 import networkx as nx
 import scipy.sparse as sp
+import pytest
 from graphconstructor import Graph
 from graphconstructor.operators import MetricDistanceFilter
 
@@ -52,8 +53,8 @@ def test_undirected_filtering_distortion():
 
 def test_directed_graph_not_implemented():
     G0 = simple_undirected_graph()
-    out = MetricDistanceFilter().apply(G0)
-    assert out is None
+    with pytest.raises(NotImplementedError):
+        MetricDistanceFilter().apply(G0)
 
 def test_edge_removal_logic():
     G0 = simple_undirected_graph()
