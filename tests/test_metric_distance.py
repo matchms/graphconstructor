@@ -21,6 +21,16 @@ def simple_undirected_graph():
 
     return Graph.from_csr(A, directed=False, weighted=True, mode="similarity")
 
+def simple_directed_graph():
+    A = _csr(
+        data=[0.5, 0.5, 0.3],
+        rows=[0, 0, 1],
+        cols=[1, 2, 2],
+        n=3,
+    )
+
+    return Graph.from_csr(A, directed=True, weighted=True, mode="similarity")
+
 def test_basic_undirected_filtering():
     G0 = simple_undirected_graph()
 
@@ -52,7 +62,7 @@ def test_undirected_filtering_distortion():
         assert len(key) == 2
 
 def test_directed_graph_not_implemented():
-    G0 = simple_undirected_graph()
+    G0 = simple_directed_graph()
     with pytest.raises(NotImplementedError):
         MetricDistanceFilter().apply(G0)
 
