@@ -223,22 +223,33 @@ def _make_objective(num_nodes, k, s, x_transform, x_inv_transform,
 @dataclass(slots=True)
 class EnhancedConfigurationModelFilter(GraphOperator):
     """
-    Filter an undirected weighted similarity graph using the Enhanced
-    Configuration Model (ECM).
+    Extract a weighted undirected backbone using the Enhanced Configuration
+    Model (ECM).
 
-    This operator fits the ECM null model to the input graph and returns a new
-    graph whose edge weights are the ECM p-values associated with the observed
-    edge weights. The model preserves, in expectation, both the degree sequence
-    and the strength sequence of the input graph.
+    The operator fits the ECM null model to the input graph, computes an ECM
+    p-value for each observed edge, and retains only edges whose p-value is
+    less than or equal to ``alpha``.
 
-    The implementation follows the maximum-likelihood formulation of the ECM
-    for weighted undirected networks. Internally, it estimates the node-wise
-    model parameters ``x`` and ``y`` by minimizing the negative log-likelihood
-    in a reparameterized unconstrained space and then computes an ECM-based
-    p-value for each observed edge.
+    By default, the returned graph preserves the original weights of the
+    retained edges. Optionally, the retained edge weights can be replaced by
+    their ECM p-values.
 
     Parameters
     ----------
+    alpha : float, default=0.05
+        Significance threshold for retaining edges. Smaller values produce
+        sparser backbones.
+    replace_weights_by_p_values : bool, default=False
+        If ``False``, retain the original edge weights for all edges passing
+        the ECM significance threshold.
+
+        If ``True``, replace retained edge weights by their ECM p-values.
+        Note that in this case smaller weights indicate higher statistical
+        significance, which differs from the usual interpretation of
+        similarity weights.
+    copy_meta : bool, default=True
+        If ``True``, copy graph metadata to the returned graph. If ``False``,
+        keep the original metadata reference.
     x_transform_idx : int, default=0
         Index selecting the reparameterization used for the positive ECM
         parameters ``x``. The index refers to :data:`R_to_zero_to_inf`, whose
@@ -249,16 +260,18 @@ class EnhancedConfigurationModelFilter(GraphOperator):
         parameters ``y``. The index refers to :data:`R_to_zero_to_one`, whose
         entries map from the real line to the open interval ``(0, 1)``.
 
+    References
+    ----------
     Paper: https://arxiv.org/abs/1706.00230
-    Code: https://gitlab.liris.cnrs.fr/coregraphie/aliplosone/-/blob/main/Backbones/ecm.py
+    Original Source code: https://gitlab.liris.cnrs.fr/coregraphie/aliplosone/-/blob/main/Backbones/ecm.py
     """
-    supported_modes = ["similarity"]
-
-    # Reparameterization choices for the ECM variables:
-    # x: R -> (0, inf)
-    # y: R -> (0, 1)
+    alpha: float = 0.05
+    replace_weights_by_p_values: bool = False
+    copy_meta: bool = True
     x_transform_idx: int = 0
     y_transform_idx: int = 0
+
+    supported_modes = ["similarity"]
 
     def _directed(self, G: Graph) -> Graph:
         raise NotImplementedError(
@@ -266,6 +279,9 @@ class EnhancedConfigurationModelFilter(GraphOperator):
         )
 
     def _undirected(self, G: Graph) -> Graph:
+        if not (0.0 < self.alpha <= 1.0):
+            raise ValueError("alpha must satisfy 0 < alpha <= 1.")
+
         W = G.adj.copy().tocsr()
         W -= sp.diags(W.diagonal())
 
@@ -329,21 +345,25 @@ class EnhancedConfigurationModelFilter(GraphOperator):
         weights = W_lower.data
 
         pvals = _pval_matrix_data(x_opt, y_opt, row, col, weights)
+        keep = pvals <= self.alpha
 
-        W_p = sp.csr_matrix(
-            (pvals, (row, col)),
+        out_data = pvals[keep] if self.replace_weights_by_p_values else weights[keep]
+
+        W_backbone = sp.csr_matrix(
+            (out_data, (row[keep], col[keep])),
             shape=(num_nodes, num_nodes),
-            dtype=np.float64,
+            dtype=np.float64 if self.replace_weights_by_p_values else W.dtype,
         )
-        # Symmetrise (ECM is undirected)
-        W_p = W_p + W_p.T
+        W_backbone = W_backbone + W_backbone.T
 
         # Convert back to Graph
         return Graph.from_csr(
-            W_p,
-            mode="similarity",
+            W_backbone,
+            directed=False,
             weighted=True,
-            directed=False
+            mode=G.mode,
+            meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+            sym_op="max",
         )
     
     def apply(self, G: Graph) -> Graph:
