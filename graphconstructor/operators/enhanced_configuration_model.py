@@ -97,6 +97,7 @@ def _neg_log_likelihood_grad(x, y, k, s):
     """
     Analytic gradient of the negative log-likelihood w.r.t. the *bounded*
     parameters (x, y). Derived by differentiating formula (13).
+    Parameters should be in their bounded form (x > 0, 0 < y < 1) for correct gradients.
     """
     N = len(x)
     grad_x = np.empty(N, dtype=np.float64)
@@ -222,23 +223,40 @@ def _make_objective(num_nodes, k, s, x_transform, x_inv_transform,
 @dataclass(slots=True)
 class EnhancedConfigurationModelFilter(GraphOperator):
     """
-    Enhanced Configuration Model (ECM) filter for weighted, undirected
-    similarity graphs.
+    Filter an undirected weighted similarity graph using the Enhanced
+    Configuration Model (ECM).
 
-    Replaces the original JAX-based implementation with Numba + NumPy kernels:
-    - @njit kernels for the negative log-likelihood, its analytic gradient,
-      and the p-value computation.
-    - Reparameterisation-based optimisation (no explicit bounds): the domain
-      constraints x > 0 and 0 < y < 1 are enforced implicitly by mapping the
-      unconstrained optimisation variables through smooth homeomorphisms before
-      evaluating the objective — exactly as in the original MaxentGraph design.
+    This operator fits the ECM null model to the input graph and returns a new
+    graph whose edge weights are the ECM p-values associated with the observed
+    edge weights. The model preserves, in expectation, both the degree sequence
+    and the strength sequence of the input graph.
+
+    The implementation follows the maximum-likelihood formulation of the ECM
+    for weighted undirected networks. Internally, it estimates the node-wise
+    model parameters ``x`` and ``y`` by minimizing the negative log-likelihood
+    in a reparameterized unconstrained space and then computes an ECM-based
+    p-value for each observed edge.
+
+    Parameters
+    ----------
+    x_transform_idx : int, default=0
+        Index selecting the reparameterization used for the positive ECM
+        parameters ``x``. The index refers to :data:`R_to_zero_to_inf`, whose
+        entries map from the real line to the open interval ``(0, inf)``.
+
+    y_transform_idx : int, default=0
+        Index selecting the reparameterization used for the bounded ECM
+        parameters ``y``. The index refers to :data:`R_to_zero_to_one`, whose
+        entries map from the real line to the open interval ``(0, 1)``.
 
     Paper: https://arxiv.org/abs/1706.00230
     Code: https://gitlab.liris.cnrs.fr/coregraphie/aliplosone/-/blob/main/Backbones/ecm.py
     """
     supported_modes = ["similarity"]
 
-    # Indices into R_to_zero_to_inf / R_to_zero_to_one (0 = exp/sigmoid)
+    # Reparameterization choices for the ECM variables:
+    # x: R -> (0, inf)
+    # y: R -> (0, 1)
     x_transform_idx: int = 0
     y_transform_idx: int = 0
 
@@ -276,14 +294,16 @@ class EnhancedConfigurationModelFilter(GraphOperator):
             y_inv_transform(v0_bounded[num_nodes:]),
         ])
 
-        # ---- Objective + analytic gradient in unconstrained space ---------
+        # ---- Objective + gradient in unconstrained space ---------
         fun, jac = _make_objective(
             num_nodes, k, s,
             x_transform, x_inv_transform,
             y_transform, y_inv_transform,
         )
 
-        # ---- Optimise (no explicit bounds — domain enforced by transforms) -
+        # ---- Optimize in reparameterized space -----------------------------
+        # The optimizer works on unconstrained variables; valid ECM parameter
+        # domains are enforced by the x/y transforms before each evaluation.
         res = so.minimize(
             fun=fun,
             jac=jac,
