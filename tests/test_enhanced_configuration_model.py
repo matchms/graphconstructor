@@ -236,3 +236,72 @@ def test_neg_log_likelihood_grad_returns_finite_arrays():
     assert grad_y.shape == y.shape
     assert np.all(np.isfinite(grad_x))
     assert np.all(np.isfinite(grad_y))
+
+
+@pytest.mark.parametrize("alphas", [
+    [0.001, 0.01, 0.05, 0.1, 0.5, 1.0],
+])
+def test_ecm_retained_edges_monotone_in_alpha(small_undirected_graph, alphas):
+    """
+    Add mock-based tests to verify that the alpha thresholding logic in ECM's apply() method
+    correctly retains edges based on the p-values computed from the optimization output.
+    """
+    counts = []
+    for alpha in alphas:
+        np.random.seed(123)
+        Gp = EnhancedConfigurationModelFilter(alpha=alpha).apply(small_undirected_graph)
+        # undirected graph stores both directions explicitly
+        counts.append(Gp.adj.nnz)
+
+    assert counts == sorted(counts)
+
+
+def test_ecm_alpha_thresholding_exact_edge_counts(monkeypatch):
+    A = _csr(
+        data=[4, 4, 2, 2, 1, 1],
+        rows=[0, 1, 0, 2, 1, 2],
+        cols=[1, 0, 2, 0, 2, 1],
+        n=3,
+    )
+    G = Graph.from_csr(A, directed=False, weighted=True, mode="similarity")
+
+    # Lower-triangle edges of this graph are:
+    # (1,0), (2,0), (2,1)
+    fake_pvals = np.array([0.001, 0.02, 0.2], dtype=np.float64)
+
+    def fake_pval_matrix_data(x, y, row, col, weights):
+        assert len(weights) == 3
+        return fake_pvals.copy()
+
+    def fake_make_objective(*args, **kwargs):
+        def fun(v):
+            return 0.0
+        def jac(v):
+            return np.zeros_like(v)
+        return fun, jac
+
+    class FakeResult:
+        success = True
+        message = "ok"
+        x = np.zeros(2 * G.n_nodes, dtype=np.float64)
+
+    def fake_minimize(*args, **kwargs):
+        return FakeResult()
+
+    import graphconstructor.operators.enhanced_configuration_model as ecm_mod
+
+    monkeypatch.setattr(ecm_mod, "_pval_matrix_data", fake_pval_matrix_data)
+    monkeypatch.setattr(ecm_mod, "_make_objective", fake_make_objective)
+    monkeypatch.setattr(ecm_mod.so, "minimize", fake_minimize)
+
+    cases = [
+        (0.0005, 0),  # keep none
+        (0.01,   2),  # keep one undirected edge -> 2 stored entries
+        (0.05,   4),  # keep two undirected edges -> 4 stored entries
+        (0.5,    6),  # keep all three undirected edges -> 6 stored entries
+    ]
+
+    for alpha, expected_nnz in cases:
+        op = EnhancedConfigurationModelFilter(alpha=alpha)
+        Gp = op.apply(G)
+        assert Gp.adj.nnz == expected_nnz
