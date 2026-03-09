@@ -176,3 +176,78 @@ def test_neg_log_likelihood_grad_matches_finite_differences(N):
 
     # Compare with reasonable tolerances (FD is noisy; tighten once stable)
     np.testing.assert_allclose(g_an, g_fd, rtol=1e-4, atol=1e-5)
+
+
+def _finite_difference_gradient(fun, x, y, k, s, h=1e-7):
+    """Compute central-difference gradients for x and y separately."""
+    grad_x = np.empty_like(x, dtype=np.float64)
+    grad_y = np.empty_like(y, dtype=np.float64)
+
+    for i in range(len(x)):
+        x_plus = x.copy()
+        x_minus = x.copy()
+        x_plus[i] += h
+        x_minus[i] -= h
+
+        grad_x[i] = (
+            fun(x_plus, y, k, s) - fun(x_minus, y, k, s)
+        ) / (2.0 * h)
+
+    for i in range(len(y)):
+        y_plus = y.copy()
+        y_minus = y.copy()
+        y_plus[i] += h
+        y_minus[i] -= h
+
+        grad_y[i] = (
+            fun(x, y_plus, k, s) - fun(x, y_minus, k, s)
+        ) / (2.0 * h)
+
+    return grad_x, grad_y
+
+
+@pytest.mark.parametrize("n", [3, 5])
+def test_neg_log_likelihood_grad_matches_finite_difference(n):
+    """
+    Check that the analytic gradient of the ECM negative log-likelihood
+    matches a numerical central-difference approximation.
+
+    The test keeps x > 0 and 0 < y < 1 well away from the boundaries
+    so that the finite-difference estimate is stable.
+    """
+    rng = np.random.default_rng(12345)
+
+    # Stay safely inside the domain:
+    # x_i > 0, 0 < y_i < 1
+    x = rng.uniform(0.3, 2.0, size=n).astype(np.float64)
+    y = rng.uniform(0.2, 0.8, size=n).astype(np.float64)
+
+    # k and s are treated as observed constants in the likelihood
+    k = rng.uniform(0.5, 5.0, size=n).astype(np.float64)
+    s = rng.uniform(0.5, 5.0, size=n).astype(np.float64)
+
+    grad_x_analytic, grad_y_analytic = _neg_log_likelihood_grad(x, y, k, s)
+    grad_x_fd, grad_y_fd = _finite_difference_gradient(
+        _neg_log_likelihood, x, y, k, s, h=1e-7
+    )
+
+    np.testing.assert_allclose(
+        grad_x_analytic, grad_x_fd, rtol=1e-6, atol=1e-7
+    )
+    np.testing.assert_allclose(
+        grad_y_analytic, grad_y_fd, rtol=1e-6, atol=1e-7
+    )
+
+
+def test_neg_log_likelihood_grad_returns_finite_arrays():
+    x = np.array([0.7, 1.2, 1.8], dtype=np.float64)
+    y = np.array([0.2, 0.4, 0.6], dtype=np.float64)
+    k = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+    s = np.array([1.5, 2.5, 3.5], dtype=np.float64)
+
+    grad_x, grad_y = _neg_log_likelihood_grad(x, y, k, s)
+
+    assert grad_x.shape == x.shape
+    assert grad_y.shape == y.shape
+    assert np.all(np.isfinite(grad_x))
+    assert np.all(np.isfinite(grad_y))
