@@ -179,9 +179,17 @@ def _make_objective(num_nodes, k, s, x_transform, x_inv_transform,
     """
 
     def _transform(v):
+        """Clip and transform unconstrained v to bounded (x, y) for the objective."""
         x_raw = v[:num_nodes]
         y_raw = v[num_nodes:]
-        return x_transform(x_raw), y_transform(y_raw)
+
+        x = x_transform(x_raw)
+        y = y_transform(y_raw)
+
+        x = np.maximum(x, EPS)
+        y = np.clip(y, EPS, 1.0 - EPS)
+
+        return x, y
 
     def fun(v):
         x, y = _transform(v)
@@ -324,4 +332,3 @@ class EnhancedConfigurationModelFilter(GraphOperator):
             return self._directed(G)
         else:
             return self._undirected(G)
-
