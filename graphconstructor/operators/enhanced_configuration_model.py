@@ -96,13 +96,15 @@ def _neg_log_likelihood(x, y, k, s):
 def _neg_log_likelihood_grad(x, y, k, s):
     """
     Analytic gradient of the negative log-likelihood w.r.t. the *bounded*
-    parameters (x, y).  Derived by differentiating formula (13).
+    parameters (x, y). Derived by differentiating formula (13).
     """
     N = len(x)
     grad_x = np.empty(N, dtype=np.float64)
     grad_y = np.empty(N, dtype=np.float64)
 
-    # Base terms: -k_i/x_i and -s_i/y_i
+    # Derivatives of the node-wise terms:
+    #  - sum_i k_i log(x_i)  ->  -k_i / x_i
+    #  - sum_i s_i log(y_i)  ->  -s_i / y_i
     for i in range(N):
         grad_x[i] = -k[i] / x[i]
         grad_y[i] = -s[i] / y[i]
@@ -120,12 +122,20 @@ def _neg_log_likelihood_grad(x, y, k, s):
             grad_x[j] += (yy * x[i]) / D
 
             # y-grad from -log(1-yy) + log(D)
-            inv1m = 1.0 / (1.0 - yy)         # for -log(1-yy) term
-            invD  = 1.0 / D                  # for log(D) term
-            common = (xx - 1.0) * invD       # multiplier for y-derivative of log(D)
+            # First part:
+            #   d/dy_i [-log(1 - yy)] = y_j / (1 - yy)
+            #   d/dy_j [-log(1 - yy)] = y_i / (1 - yy)
+            d_minus_log1myy_dyi = y[j] / (1.0 - yy)
+            d_minus_log1myy_dyj = y[i] / (1.0 - yy)
 
-            grad_y[i] += y[j] * inv1m + y[j] * common
-            grad_y[j] += y[i] * inv1m + y[i] * common
+            # Second part:
+            #   dD/dy_i = y_j (xx - 1)
+            #   dD/dy_j = y_i (xx - 1)
+            d_logD_dyi = y[j] * (xx - 1.0) / D
+            d_logD_dyj = y[i] * (xx - 1.0) / D
+
+            grad_y[i] += d_minus_log1myy_dyi + d_logD_dyi
+            grad_y[j] += d_minus_log1myy_dyj + d_logD_dyj
 
     return grad_x, grad_y
 
@@ -182,8 +192,8 @@ def _make_objective(num_nodes, k, s, x_transform, x_inv_transform,
         gx_bounded, gy_bounded = _neg_log_likelihood_grad(x, y, k, s)
 
         # Chain rule: dL/dv = dL/dz * dz/dv
-        # We approximate dz/dv numerically for the transform Jacobian diagonal,
-        # using a small finite difference (avoids JAX; transforms are cheap).
+        # Approximates dz/dv numerically for the transform Jacobian diagonal,
+        # using a small finite difference.
         h = np.sqrt(EPS)
         v_raw_x = v[:num_nodes]
         v_raw_y = v[num_nodes:]
