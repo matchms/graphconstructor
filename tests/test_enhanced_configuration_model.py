@@ -11,16 +11,38 @@ def _csr(*, data, rows, cols, n):
     return sp.csr_matrix((data, (rows, cols)), shape=(n, n))
 
 
-def _central_diff_grad(f, z, h=1e-6):
-    """Central-difference gradient for 1D numpy arrays."""
-    g = np.zeros_like(z, dtype=np.float64)
-    for i in range(z.size):
-        zp = z.copy()
-        zm = z.copy()
-        zp[i] += h
-        zm[i] -= h
-        g[i] = (f(zp) - f(zm)) / (2.0 * h)
-    return g
+def _finite_difference_gradient(fun, x, y, k, s, h=1e-7):
+    """Central-difference gradient for x and y separately."""
+    grad_x = np.empty_like(x, dtype=np.float64)
+    grad_y = np.empty_like(y, dtype=np.float64)
+
+    for i in range(len(x)):
+        x_plus = x.copy()
+        x_minus = x.copy()
+        x_plus[i] += h
+        x_minus[i] -= h
+        grad_x[i] = (fun(x_plus, y, k, s) - fun(x_minus, y, k, s)) / (2.0 * h)
+
+    for i in range(len(y)):
+        y_plus = y.copy()
+        y_minus = y.copy()
+        y_plus[i] += h
+        y_minus[i] -= h
+        grad_y[i] = (fun(x, y_plus, k, s) - fun(x, y_minus, k, s)) / (2.0 * h)
+
+    return grad_x, grad_y
+
+
+@pytest.fixture
+def small_undirected_graph():
+    """A small symmetric weighted similarity graph."""
+    A = _csr(
+        data=[4, 4, 2, 2, 1, 1],
+        rows=[0, 1, 0, 2, 1, 2],
+        cols=[1, 0, 2, 0, 2, 1],
+        n=3,
+    )
+    return Graph.from_csr(A, directed=False, weighted=True, mode="similarity")
 
 
 def test_ecm_rejects_directed_graph():
@@ -38,48 +60,34 @@ def test_ecm_rejects_directed_graph():
         op.apply(G)
 
 
-def test_ecm_output_graph_basic_invariants_undirected():
-    # Make an undirected weighted graph
-    # (store symmetric entries explicitly)
-    A = _csr(
-        data=[4, 4, 2, 2, 1, 1],
-        rows=[0, 1, 0, 2, 1, 2],
-        cols=[1, 0, 2, 0, 2, 1],
-        n=3,
-    )
-    G = Graph.from_csr(A, directed=False, weighted=True, mode="similarity")
-
-    np.random.seed(0)  # for deterministic init guess in your implementation
-    op = EnhancedConfigurationModelFilter()
-    Gp = op.apply(G)
+@pytest.mark.parametrize("alpha", [0.01, 0.05, 0.5, 1.0])
+def test_ecm_output_graph_basic_invariants_undirected(small_undirected_graph, alpha):
+    np.random.seed(0)
+    op = EnhancedConfigurationModelFilter(alpha=alpha)
+    Gp = op.apply(small_undirected_graph)
 
     assert isinstance(Gp, Graph)
-    assert Gp.n_nodes == G.n_nodes
+    assert Gp.n_nodes == small_undirected_graph.n_nodes
     assert Gp.directed is False
     assert Gp.weighted is True
     assert Gp.mode == "similarity"
 
     Wp = Gp.adj.tocsr()
 
-    # Diagonal must be zero (self-loops ignored)
+    # No self-loops in output
     assert np.allclose(Wp.diagonal(), 0.0)
 
-    # P-values should be in [0, 1] (allow tiny numerical noise)
-    if Wp.nnz > 0:
-        vals = Wp.data
-        assert np.nanmin(vals) >= -1e-12
-        assert np.nanmax(vals) <= 1.0 + 1e-12
+    # Output must remain symmetric
+    assert (Wp != Wp.T).nnz == 0
 
 
 def test_ecm_ignores_input_self_loops():
-    # Create undirected graph with a self-loop on node 0
     A = _csr(
         data=[10, 4, 4],
         rows=[0, 0, 1],
         cols=[0, 1, 0],
         n=2,
     )
-    # Mirror for undirected adjacency explicitly
     A = A + A.T
 
     G = Graph.from_csr(A.tocsr(), directed=False, weighted=True, mode="similarity")
@@ -92,118 +100,106 @@ def test_ecm_ignores_input_self_loops():
     assert np.allclose(Wp.diagonal(), 0.0)
 
 
-def test_ecm_only_modifies_existing_edges_sparsity_subset():
+def test_ecm_output_edges_are_subset_of_input_edges(small_undirected_graph):
     """
-    ECM p-values are computed only for observed edges (nonzeros of W),
-    so the output should not introduce brand-new edges where input had none.
-    (It may drop some, but shouldn't add new ones.)
+    Thresholding may remove observed edges, but must never introduce new ones.
     """
-    A = _csr(
-        data=[3, 3, 2, 2],
-        rows=[0, 1, 1, 2],
-        cols=[1, 0, 2, 1],
-        n=3,
-    )
-    G = Graph.from_csr(A, directed=False, weighted=True, mode="similarity")
-
     np.random.seed(0)
-    op = EnhancedConfigurationModelFilter()
-    Gp = op.apply(G)
+    op = EnhancedConfigurationModelFilter(alpha=0.5)
+    Gp = op.apply(small_undirected_graph)
 
-    Win = G.adj.tocsr()
+    Win = small_undirected_graph.adj.tocsr()
     Wout = Gp.adj.tocsr()
 
     in_mask = (Win != 0).astype(np.int8)
     out_mask = (Wout != 0).astype(np.int8)
 
-    # Output nonzeros must be a subset of input nonzeros:
-    # i.e., (out_mask - in_mask) should have no positive entries
     diff = out_mask - in_mask
     assert diff.nnz == 0 or diff.max() <= 0
 
 
-def test_ecm_reproducible_given_fixed_seed():
-    A = _csr(
-        data=[4, 4, 2, 2, 1, 1],
-        rows=[0, 1, 0, 2, 1, 2],
-        cols=[1, 0, 2, 0, 2, 1],
-        n=3,
-    )
-    G = Graph.from_csr(A, directed=False, weighted=True, mode="similarity")
-    op = EnhancedConfigurationModelFilter()
+def test_ecm_alpha_one_keeps_all_existing_edges(small_undirected_graph):
+    """
+    Since ECM p-values should lie in [0, 1], alpha=1 should keep all observed
+    off-diagonal edges.
+    """
+    np.random.seed(0)
+    op = EnhancedConfigurationModelFilter(alpha=1.0)
+    Gp = op.apply(small_undirected_graph)
+
+    Win = small_undirected_graph.adj.tocsr().copy()
+    Win = Win - sp.diags(Win.diagonal())
+    Wout = Gp.adj.tocsr()
+
+    in_mask = (Win != 0).astype(np.int8)
+    out_mask = (Wout != 0).astype(np.int8)
+
+    assert (in_mask != out_mask).nnz == 0
+
+
+@pytest.mark.parametrize("alpha", [1e-6, 1e-3, 1e-2])
+def test_ecm_smaller_alpha_cannot_increase_number_of_edges(small_undirected_graph, alpha):
+    np.random.seed(0)
+    G_loose = EnhancedConfigurationModelFilter(alpha=1.0).apply(small_undirected_graph)
+    np.random.seed(0)
+    G_strict = EnhancedConfigurationModelFilter(alpha=alpha).apply(small_undirected_graph)
+
+    assert G_strict.adj.nnz <= G_loose.adj.nnz
+
+
+def test_ecm_default_keeps_original_weights_for_retained_edges(small_undirected_graph):
+    np.random.seed(0)
+    op = EnhancedConfigurationModelFilter(alpha=1.0, replace_weights_by_p_values=False)
+    Gp = op.apply(small_undirected_graph)
+
+    Win = small_undirected_graph.adj.tocsr()
+    Wout = Gp.adj.tocsr()
+
+    # With alpha=1, all off-diagonal edges should remain, and the weights
+    # should match the original weights.
+    assert np.array_equal(Wout.indices, Win.indices)
+    assert np.array_equal(Wout.indptr, Win.indptr)
+    assert np.allclose(Wout.data, Win.data, rtol=1e-8, atol=1e-10)
+
+
+def test_ecm_can_replace_weights_by_p_values(small_undirected_graph):
+    np.random.seed(0)
+    op = EnhancedConfigurationModelFilter(alpha=1.0, replace_weights_by_p_values=True)
+    Gp = op.apply(small_undirected_graph)
+
+    Wp = Gp.adj.tocsr()
+
+    # Retained edge weights now represent p-values
+    if Wp.nnz > 0:
+        assert np.nanmin(Wp.data) >= -1e-12
+        assert np.nanmax(Wp.data) <= 1.0 + 1e-12
+
+    # In general these should differ from the original weights
+    Win = small_undirected_graph.adj.tocsr()
+    assert not np.allclose(Wp.data, Win.data)
+
+
+def test_ecm_reproducible_given_fixed_seed(small_undirected_graph):
+    op = EnhancedConfigurationModelFilter(alpha=0.5, replace_weights_by_p_values=True)
 
     np.random.seed(123)
-    Gp1 = op.apply(G)
+    Gp1 = op.apply(small_undirected_graph)
     W1 = Gp1.adj.tocsr()
 
     np.random.seed(123)
-    Gp2 = op.apply(G)
+    Gp2 = op.apply(small_undirected_graph)
     W2 = Gp2.adj.tocsr()
 
-    # Compare sparse matrices exactly in structure and approximately in values.
-    assert (W1 != 0).nnz == (W2 != 0).nnz
     assert np.array_equal(W1.indices, W2.indices)
     assert np.array_equal(W1.indptr, W2.indptr)
     assert np.allclose(W1.data, W2.data, rtol=1e-8, atol=1e-10)
 
 
-@pytest.mark.parametrize("N", [4, 6])
-def test_neg_log_likelihood_grad_matches_finite_differences(N):
-    rng = np.random.default_rng(0)
-
-    # Make bounded parameters safely away from problematic edges
-    x = rng.uniform(0.2, 2.0, size=N).astype(np.float64)     # x > 0
-    y = rng.uniform(0.05, 0.95, size=N).astype(np.float64)   # 0 < y < 1
-
-    # Dummy constraints (must be nonnegative; avoid zeros to keep logs happy)
-    k = rng.integers(1, 5, size=N).astype(np.float64)
-    s = rng.uniform(0.5, 5.0, size=N).astype(np.float64)
-
-    # Wrap objective as function of concatenated z = [x, y]
-    def f(z):
-        xx = z[:N]
-        yy = z[N:]
-        return float(_neg_log_likelihood(xx, yy, k, s))
-
-    z0 = np.concatenate([x, y])
-
-    # Finite-diff reference
-    g_fd = _central_diff_grad(f, z0, h=1e-6)
-
-    # Analytic gradient under test
-    gx, gy = _neg_log_likelihood_grad(x, y, k, s)
-    g_an = np.concatenate([gx, gy])
-
-    # Compare with reasonable tolerances (FD is noisy; tighten once stable)
-    np.testing.assert_allclose(g_an, g_fd, rtol=1e-4, atol=1e-5)
-
-
-def _finite_difference_gradient(fun, x, y, k, s, h=1e-7):
-    """Compute central-difference gradients for x and y separately."""
-    grad_x = np.empty_like(x, dtype=np.float64)
-    grad_y = np.empty_like(y, dtype=np.float64)
-
-    for i in range(len(x)):
-        x_plus = x.copy()
-        x_minus = x.copy()
-        x_plus[i] += h
-        x_minus[i] -= h
-
-        grad_x[i] = (
-            fun(x_plus, y, k, s) - fun(x_minus, y, k, s)
-        ) / (2.0 * h)
-
-    for i in range(len(y)):
-        y_plus = y.copy()
-        y_minus = y.copy()
-        y_plus[i] += h
-        y_minus[i] -= h
-
-        grad_y[i] = (
-            fun(x, y_plus, k, s) - fun(x, y_minus, k, s)
-        ) / (2.0 * h)
-
-    return grad_x, grad_y
+@pytest.mark.parametrize("alpha", [-0.1, 0.0, 1.1])
+def test_ecm_rejects_invalid_alpha(small_undirected_graph, alpha):
+    op = EnhancedConfigurationModelFilter(alpha=alpha)
+    with pytest.raises(ValueError):
+        op.apply(small_undirected_graph)
 
 
 @pytest.mark.parametrize("n", [3, 5])
@@ -211,18 +207,11 @@ def test_neg_log_likelihood_grad_matches_finite_difference(n):
     """
     Check that the analytic gradient of the ECM negative log-likelihood
     matches a numerical central-difference approximation.
-
-    The test keeps x > 0 and 0 < y < 1 well away from the boundaries
-    so that the finite-difference estimate is stable.
     """
     rng = np.random.default_rng(12345)
 
-    # Stay safely inside the domain:
-    # x_i > 0, 0 < y_i < 1
     x = rng.uniform(0.3, 2.0, size=n).astype(np.float64)
     y = rng.uniform(0.2, 0.8, size=n).astype(np.float64)
-
-    # k and s are treated as observed constants in the likelihood
     k = rng.uniform(0.5, 5.0, size=n).astype(np.float64)
     s = rng.uniform(0.5, 5.0, size=n).astype(np.float64)
 
@@ -231,12 +220,8 @@ def test_neg_log_likelihood_grad_matches_finite_difference(n):
         _neg_log_likelihood, x, y, k, s, h=1e-7
     )
 
-    np.testing.assert_allclose(
-        grad_x_analytic, grad_x_fd, rtol=1e-6, atol=1e-7
-    )
-    np.testing.assert_allclose(
-        grad_y_analytic, grad_y_fd, rtol=1e-6, atol=1e-7
-    )
+    np.testing.assert_allclose(grad_x_analytic, grad_x_fd, rtol=1e-6, atol=1e-7)
+    np.testing.assert_allclose(grad_y_analytic, grad_y_fd, rtol=1e-6, atol=1e-7)
 
 
 def test_neg_log_likelihood_grad_returns_finite_arrays():
