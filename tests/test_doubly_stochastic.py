@@ -16,12 +16,15 @@ def _csr(data, rows, cols, n):
 # ----------------- Positive dense matrix: converges to ~doubly stochastic -----------------
 def test_doubly_stochastic_converges_on_positive_dense():
     # Strictly positive, symmetric 4x4 (undirected)
-    M = np.array([
-        [0.2, 0.8, 0.5, 0.3],
-        [0.7, 0.1, 0.4, 0.6],
-        [0.3, 0.9, 0.2, 0.5],
-        [0.5, 0.2, 0.7, 0.4],
-    ], dtype=float)
+    M = np.array(
+        [
+            [0.2, 0.8, 0.5, 0.3],
+            [0.7, 0.1, 0.4, 0.6],
+            [0.3, 0.9, 0.2, 0.5],
+            [0.5, 0.2, 0.7, 0.4],
+        ],
+        dtype=float,
+    )
     # Zero the diagonal (typical adjacency semantics)
     np.fill_diagonal(M, 0.0)
 
@@ -40,6 +43,49 @@ def test_doubly_stochastic_converges_on_positive_dense():
     assert np.allclose(col_sums, 1.0, atol=1e-6)
 
     # Flags preserved
+    assert not G.directed and G.weighted
+
+
+def test_doubly_stochastic_with_backbone_method():
+    # Strictly positive, asymmetric matrix (to make backbone relevant)
+    M = np.array(
+        [
+            [0.2, 0.8, 0.5, 0.3],
+            [0.7, 0.1, 0.4, 0.6],
+            [0.3, 0.9, 0.2, 0.5],
+            [0.5, 0.2, 0.7, 0.4],
+        ],
+        dtype=float,
+    )
+
+    # Zero diagonal
+    np.fill_diagonal(M, 0.0)
+
+    G0 = Graph.from_dense(M, directed=False, weighted=True, mode="similarity", sym_op="max")
+
+    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000, backbone_method=True)
+
+    G = op.apply(G0)
+    A = G.adj
+
+    # No NaNs or infs
+    assert np.isfinite(A.data).all()
+
+    # Check that only backbone edges remain (sparser than original)
+    assert A.nnz <= G0.adj.nnz
+
+    # Rows/cols should still approximately sum to 1 (on non-isolated nodes)
+    row_sums = np.asarray(A.sum(axis=1)).ravel()
+    col_sums = np.asarray(A.sum(axis=0)).ravel()
+
+    # Only check nodes that still have edges
+    nonzero_rows = row_sums > 0
+    nonzero_cols = col_sums > 0
+
+    assert np.allclose(row_sums[nonzero_rows], row_sums[nonzero_rows][0], atol=1e-6)
+    assert np.allclose(col_sums[nonzero_cols], col_sums[nonzero_cols][0], atol=1e-6)
+
+    # Graph properties preserved
     assert not G.directed and G.weighted
 
 
@@ -65,7 +111,7 @@ def test_doubly_stochastic_sparse_with_isolates():
     col_sums = np.asarray(A2.sum(axis=0)).ravel()
 
     # Indices with edges
-    rows_with = (np.diff(A2.indptr) > 0)
+    rows_with = np.diff(A2.indptr) > 0
     cols_with = (sp.csc_matrix(A2).indptr[1:] - sp.csc_matrix(A2).indptr[:-1]) > 0
 
     # Non-isolated rows/cols sum ~1
@@ -79,6 +125,35 @@ def test_doubly_stochastic_sparse_with_isolates():
 
     # Flags preserved
     assert not G.directed and G.weighted
+
+
+def test_doubly_stochastic_sparse_with_isolates_backbone():
+    A = _csr(
+        data=[0.4, 0.6, 0.3, 0.7, 0.2, 0.5],
+        rows=[0, 0, 1, 1, 2, 3],
+        cols=[1, 2, 2, 3, 3, 2],
+        n=5,
+    )
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
+
+    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000, backbone_method=True)
+    G = op.apply(G0)
+    A2 = G.adj
+
+    assert np.isfinite(A2.data).all()
+
+    row_sums = np.asarray(A2.sum(axis=1)).ravel()
+    col_sums = np.asarray(A2.sum(axis=0)).ravel()
+    rows_with = np.diff(A2.indptr) > 0
+    cols_with = (sp.csc_matrix(A2).indptr[1:] - sp.csc_matrix(A2).indptr[:-1]) > 0
+
+    if rows_with.any():
+        assert np.all(row_sums[rows_with] > 0)
+    if cols_with.any():
+        assert np.all(col_sums[cols_with] > 0)
+
+    # Isolated node (4) stays isolated (not in the graph)
+    assert len(row_sums) == 4
 
 
 # ----------------- Directed case: rows and cols ~1 for nonzero rows/cols -----------------
@@ -100,12 +175,7 @@ def test_doubly_stochastic_directed_graph_unsolvable():
     # No NaNs or infs
     assert np.isfinite(A2.data).all()
 
-    expected_result = np.array([
-        [0. , 0.5, 0.5, 0. ],
-        [0. , 0. , 1. , 0. ],
-        [0.5, 0. , 0. , 0.5],
-        [0. , 1. , 0. , 0. ]
-        ])
+    expected_result = np.array([[0.0, 0.5, 0.5, 0.0], [0.0, 0.0, 1.0, 0.0], [0.5, 0.0, 0.0, 0.5], [0.0, 1.0, 0.0, 0.0]])
     assert np.allclose(A2.toarray(), expected_result, atol=1e-4)
 
     # Directed flag preserved

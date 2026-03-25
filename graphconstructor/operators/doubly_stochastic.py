@@ -2,8 +2,11 @@ from dataclasses import dataclass
 import numpy as np
 from ..graph import Graph
 from .base import GraphOperator
+import networkx as nx
 
 
+# Z. 48-57:
+# https://gitlab.liris.cnrs.fr/coregraphie/netbone/-/blob/main/netbone/structural/doubly_stochastic.py?ref_type=heads
 @dataclass(slots=True)
 class DoublyStochastic(GraphOperator):
     """
@@ -30,6 +33,7 @@ class DoublyStochastic(GraphOperator):
         Copy metadata frame if present. Default True.
     """
 
+    backbone_method: bool = False
     tolerance: float = 1e-5
     max_iter: int = 10_000
     copy_meta: bool = True
@@ -84,14 +88,12 @@ class DoublyStochastic(GraphOperator):
 
             # Only check rows/cols that have edges (others stay 0 and are irrelevant)
             if row_has_edges.any():
-                rows_ok = np.all((row_sums[row_has_edges] >= min_thres) &
-                                 (row_sums[row_has_edges] <= max_thres))
+                rows_ok = np.all((row_sums[row_has_edges] >= min_thres) & (row_sums[row_has_edges] <= max_thres))
             else:
                 rows_ok = True
 
             if col_has_edges.any():
-                cols_ok = np.all((col_sums[col_has_edges] >= min_thres) &
-                                 (col_sums[col_has_edges] <= max_thres))
+                cols_ok = np.all((col_sums[col_has_edges] >= min_thres) & (col_sums[col_has_edges] <= max_thres))
             else:
                 cols_ok = True
 
@@ -104,6 +106,41 @@ class DoublyStochastic(GraphOperator):
         A_scaled.data *= np.repeat(r, np.diff(A_scaled.indptr))
         # col scaling
         A_scaled.data *= c[A_scaled.indices]
+
+        # step 2
+        if self.backbone_method:
+            i = 0
+
+            rows, cols = A_scaled.nonzero()
+            vals = A_scaled.data
+
+            order = np.argsort(vals)[::-1]
+            rows = rows[order]
+            cols = cols[order]
+            vals = vals[order]
+            print(rows, cols, order)
+
+            if not G.directed:
+                G_filtered = nx.Graph()
+                while (
+                    nx.number_connected_components(G_filtered) != 1
+                    or len(G_filtered) < A_scaled.shape[0]
+                    or not nx.is_connected(G_filtered)
+                ):
+                    if i == A_scaled.shape[0]:
+                        break
+                    G_filtered.add_edge(rows[i], cols[i], weight=vals[i])
+                    i += 1
+            G_csr = nx.to_scipy_sparse_array(G_filtered)
+
+            return Graph.from_csr(
+                G_csr,
+                directed=G.directed,
+                weighted=True,
+                mode=G.mode,
+                # meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+                sym_op="max",
+            )
 
         return Graph.from_csr(
             A_scaled,
