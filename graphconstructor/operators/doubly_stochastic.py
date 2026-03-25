@@ -1,8 +1,8 @@
 from dataclasses import dataclass
+import networkx as nx
 import numpy as np
 from ..graph import Graph
 from .base import GraphOperator
-import networkx as nx
 
 
 # Z. 48-57:
