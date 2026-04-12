@@ -118,8 +118,6 @@ class DoublyStochastic(GraphOperator):
             rows = rows[order]
             cols = cols[order]
             vals = vals[order]
-            print(rows, cols, order)
-
             if not G.directed:
                 G_filtered = nx.Graph()
                 while (
@@ -127,10 +125,13 @@ class DoublyStochastic(GraphOperator):
                     or len(G_filtered) < A_scaled.shape[0]
                     or not nx.is_connected(G_filtered)
                 ):
-                    if i == A_scaled.shape[0]:
+                    if i == len(rows) or G_filtered.number_of_nodes() == len(set(rows)):
                         break
                     G_filtered.add_edge(rows[i], cols[i], weight=vals[i])
                     i += 1
+
+                # add isolated nodes
+                G_filtered.add_nodes_from(range(G.n_nodes))
             G_csr = nx.to_scipy_sparse_array(G_filtered)
 
             return Graph.from_csr(
@@ -138,7 +139,7 @@ class DoublyStochastic(GraphOperator):
                 directed=G.directed,
                 weighted=True,
                 mode=G.mode,
-                # meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+                meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
                 sym_op="max",
             )
 

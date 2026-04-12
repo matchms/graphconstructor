@@ -152,8 +152,11 @@ def test_doubly_stochastic_sparse_with_isolates_backbone():
     if cols_with.any():
         assert np.all(col_sums[cols_with] > 0)
 
-    # Isolated node (4) stays isolated (not in the graph)
-    assert len(row_sums) == 4
+    # Isolated node (4) stays isolated but is still part of the graph
+    G_nx = G.to_networkx()
+
+    assert len(row_sums) == 5
+    assert len(G_nx.edges(4)) == 0
 
 
 # ----------------- Directed case: rows and cols ~1 for nonzero rows/cols -----------------
