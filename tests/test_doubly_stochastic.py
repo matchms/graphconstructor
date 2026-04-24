@@ -61,7 +61,13 @@ def test_doubly_stochastic_with_backbone_method():
     # Zero diagonal
     np.fill_diagonal(M, 0.0)
 
-    G0 = Graph.from_dense(M, directed=False, weighted=True, mode="similarity", sym_op="max")
+    G0 = Graph.from_dense(
+        M,
+        directed=False,
+        weighted=True,
+        mode="similarity",
+        sym_op="max",
+    )
 
     op = DoublyStochasticBackbone(tolerance=1e-6, max_iter=10_000)
 
@@ -71,19 +77,17 @@ def test_doubly_stochastic_with_backbone_method():
     # No NaNs or infs
     assert np.isfinite(A.data).all()
 
-    # Check that only backbone edges remain (sparser than original)
+    # Backbone should be no denser than original graph
     assert A.nnz <= G0.adj.nnz
 
-    # Rows/cols should still approximately sum to 1 (on non-isolated nodes)
-    row_sums = np.asarray(A.sum(axis=1)).ravel()
-    col_sums = np.asarray(A.sum(axis=0)).ravel()
+    # For this connected 4-node graph, the backbone should connect all nodes.
+    assert G.is_connected()
 
-    # Only check nodes that still have edges
-    nonzero_rows = row_sums > 0
-    nonzero_cols = col_sums > 0
-
-    assert np.allclose(row_sums[nonzero_rows], row_sums[nonzero_rows][0], atol=1e-6)
-    assert np.allclose(col_sums[nonzero_cols], col_sums[nonzero_cols][0], atol=1e-6)
+    # The backbone implementation adds strongest edges until
+    # connected, a connected undirected graph should end up with at least n-1
+    # and at most the original number of edges.
+    assert G.n_edges >= G.n_nodes - 1
+    assert G.n_edges <= G0.n_edges
 
     # Graph properties preserved
     assert not G.directed and G.weighted
@@ -158,6 +162,60 @@ def test_doubly_stochastic_sparse_with_isolates_backbone():
     assert len(row_sums) == 5
     assert len(G_nx.edges(4)) == 0
 
+
+def test_doubly_stochastic_backbone_keeps_adding_edges_until_connected():
+    # This graph has two very strong edges, 0--1 and 2--3, plus one weak
+    # bridge, 1--2. 
+    A = _csr(
+        data=[100.0, 100.0, 100.0, 100.0, 1.0, 1.0],
+        rows=[0, 1, 2, 3, 1, 2],
+        cols=[1, 0, 3, 2, 2, 1],
+        n=4,
+    )
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
+
+    op = DoublyStochasticBackbone(tolerance=1e-6, max_iter=10_000)
+    G = op.apply(G0)
+
+    assert G.is_connected()
+    assert G.n_edges == 3
+
+    # The weak bridge is required for connectivity and should not be skipped.
+    assert G.adj[1, 2] > 0
+    assert G.adj[2, 1] > 0
+
+
+def test_doubly_stochastic_backbone_preserves_node_order_after_networkx_conversion():
+    # Node 4 is part of the strongest edge. Without an explicit nodelist in
+    # nx.to_scipy_sparse_array, NetworkX insertion order can remap this edge
+    # to different matrix indices.
+    A = _csr(
+        data=[10.0, 10.0, 1.0, 1.0, 1.0, 1.0],
+        rows=[0, 4, 0, 1, 1, 4],
+        cols=[4, 0, 1, 0, 4, 1],
+        n=5,
+    )
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
+
+    op = DoublyStochasticBackbone(tolerance=1e-6, max_iter=10_000)
+    G = op.apply(G0)
+
+    assert G.adj.shape == (5, 5)
+
+    # Node labels should still correspond to the original matrix indices.
+    # In particular, node 4 should still be connected to the component,
+    # not silently remapped to another row/column.
+    assert G.adj[0, 4] > 0 or G.adj[1, 4] > 0
+    assert np.asarray(G.adj[4].sum()).ravel()[0] > 0
+
+    # Node 2 and node 3 were isolated in the input and should remain isolated.
+    row_sums = np.asarray(G.adj.sum(axis=1)).ravel()
+    col_sums = np.asarray(G.adj.sum(axis=0)).ravel()
+
+    assert row_sums[2] == 0.0
+    assert col_sums[2] == 0.0
+    assert row_sums[3] == 0.0
+    assert col_sums[3] == 0.0
 
 # ----------------- Directed case: rows and cols ~1 for nonzero rows/cols -----------------
 def test_doubly_stochastic_directed_graph_unsolvable():
