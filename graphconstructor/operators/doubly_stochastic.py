@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import networkx as nx
 import numpy as np
+import scipy.sparse as sp
 from ..graph import Graph
 from .base import GraphOperator
 
@@ -158,6 +159,11 @@ class DoublyStochasticBackbone(GraphOperator):
     def apply(self, G: Graph) -> Graph:
         self._check_mode_supported(G)
 
+        if G.directed:
+            raise NotImplementedError(
+                "DoublyStochasticBackbone currently supports only undirected graphs."
+            )
+
         normalized = DoublyStochasticNormalize(
             tolerance=self.tolerance,
             max_iter=self.max_iter,
@@ -165,37 +171,7 @@ class DoublyStochasticBackbone(GraphOperator):
         ).apply(G)
 
         A_scaled = normalized.adj.tocsr(copy=False)
-
-        i = 0
-        rows, cols = A_scaled.nonzero()
-        vals = A_scaled.data
-
-        order = np.argsort(vals)[::-1]
-        rows = rows[order]
-        cols = cols[order]
-        vals = vals[order]
-
-        if not G.directed:
-            G_filtered = nx.Graph()
-
-            while (
-                nx.number_connected_components(G_filtered) != 1
-                or len(G_filtered) < A_scaled.shape[0]
-                or not nx.is_connected(G_filtered)
-            ):
-                if i == len(rows) or G_filtered.number_of_nodes() == len(set(rows)):
-                    break
-
-                G_filtered.add_edge(rows[i], cols[i], weight=vals[i])
-                i += 1
-
-            # add isolated nodes
-            G_filtered.add_nodes_from(range(G.n_nodes))
-
-        else:
-            raise NotImplementedError(
-                "DoublyStochasticBackbone currently supports only undirected graphs."
-            )
+        G_filtered = self._extract_undirected_backbone(A_scaled, G.n_nodes)
 
         G_csr = nx.to_scipy_sparse_array(
             G_filtered,
@@ -210,3 +186,41 @@ class DoublyStochasticBackbone(GraphOperator):
             meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
             sym_op="max",
         )
+
+    @staticmethod
+    def _extract_undirected_backbone(A_scaled, n_nodes: int) -> nx.Graph:
+        """
+        Extract an undirected backbone from normalized edge scores.
+
+        Uses only the upper triangle of the adjacency matrix so that each
+        undirected edge is considered once.
+        """
+        G_filtered = nx.Graph()
+        G_filtered.add_nodes_from(range(n_nodes))
+
+        if n_nodes <= 1 or A_scaled.nnz == 0:
+            return G_filtered
+
+        # Use only one orientation per undirected edge and ignore self-loops.
+        A_upper = sp.triu(A_scaled, k=1).tocoo()
+
+        if A_upper.nnz == 0:
+            return G_filtered
+
+        rows = A_upper.row
+        cols = A_upper.col
+        vals = A_upper.data
+
+        order = np.argsort(vals)[::-1]
+
+        for idx in order:
+            if nx.is_connected(G_filtered):
+                break
+
+            G_filtered.add_edge(
+                int(rows[idx]),
+                int(cols[idx]),
+                weight=float(vals[idx]),
+            )
+
+        return G_filtered
