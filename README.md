@@ -19,14 +19,14 @@ This will usually be followed by a custom combination of one or multiple **opera
 
 ## Key elements of `graphconstructor`:
 
-* **Graph** class (`graphconstructor.Graph`)
+### **Graph** class (`graphconstructor.Graph`)
   Central graph class in graphconstructor. The actual graph is stored as a sparse adjacency matrix `graph.adj` and can represent a **directed** or **undirected** graph (either as a **weighted** or **unweighted** graph).
   A `graph` object also contains node metadata at `graph.metadata` in the form of a pandas DataFrame.
 
   * Editing: `drop(...)`, `sorted_by(...)`
   * Exporters: `to_networkx()`, `to_igraph()`
 
-* **Importers** (`graphconstructor.importers`)
+### **Importers** (`graphconstructor.importers`)
   Functions to construct a first graph from various import formats. This is only meant as a first step in the full "graph construction" process and will usually be followed by one or multiple **operator steps**.  
   All importers will return a `graphconstructor.Graph` object.
 
@@ -34,7 +34,7 @@ This will usually be followed by a custom combination of one or multiple **opera
   * `from_knn(indices, distances, ...)`
   * `from_ann(ann, query_data, k, ...)` (supports cached neighbors or `.query`)
 
-* **Operators** (`graphconstructor.operators`)
+### **Operators** (`graphconstructor.operators`)
   The `operators` are the central algorithms for graph construction from similarity or distance metrics.
   Starting from a similarity or distance-based graph with (usually) far too many edges for many purposes (e.g., further analysis or graph visualization), `graphconstructor` provides a range of different methods to sparsify the graph.  
   All operators will take a `graphconstructor.Graph` object as input (as well as optional parameters) and will then also return a (modified) `graphconstructor.Graph` object.
