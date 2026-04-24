@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 import scipy.sparse as sp
 from graphconstructor import Graph
-from graphconstructor.operators import DoublyStochastic
+from graphconstructor.operators import DoublyStochasticNormalize, DoublyStochasticBackbone
 
 
 def _csr(data, rows, cols, n):
@@ -29,7 +29,7 @@ def test_doubly_stochastic_converges_on_positive_dense():
     np.fill_diagonal(M, 0.0)
 
     G0 = Graph.from_dense(M, directed=False, weighted=True, mode="similarity", sym_op="max")
-    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
+    op = DoublyStochasticNormalize(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
 
     A = G.adj
@@ -63,7 +63,7 @@ def test_doubly_stochastic_with_backbone_method():
 
     G0 = Graph.from_dense(M, directed=False, weighted=True, mode="similarity", sym_op="max")
 
-    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000, backbone_method=True)
+    op = DoublyStochasticBackbone(tolerance=1e-6, max_iter=10_000)
 
     G = op.apply(G0)
     A = G.adj
@@ -100,7 +100,7 @@ def test_doubly_stochastic_sparse_with_isolates():
     )
     G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
-    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
+    op = DoublyStochasticNormalize(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
     A2 = G.adj
 
@@ -136,7 +136,7 @@ def test_doubly_stochastic_sparse_with_isolates_backbone():
     )
     G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
-    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000, backbone_method=True)
+    op = DoublyStochasticBackbone(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
     A2 = G.adj
 
@@ -171,7 +171,7 @@ def test_doubly_stochastic_directed_graph_unsolvable():
     )
     G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity")
 
-    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
+    op = DoublyStochasticNormalize(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
     A2 = G.adj
 
@@ -189,7 +189,7 @@ def test_doubly_stochastic_directed_graph_unsolvable():
 def test_doubly_stochastic_rejects_negative_weights():
     A = _csr([-0.2, 0.5], [0, 1], [1, 0], 2)
     G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity", sym_op="max")
-    op = DoublyStochastic()
+    op = DoublyStochasticNormalize()
     with pytest.raises(ValueError, match="nonnegative"):
         op.apply(G0)
 
@@ -197,7 +197,7 @@ def test_doubly_stochastic_rejects_negative_weights():
 def test_doubly_stochastic_rejects_distances():
     A = _csr([0.2, 0.5], [0, 1], [1, 0], 2)
     G0 = Graph.from_csr(A, directed=True, weighted=True, mode="distance", sym_op="max")
-    op = DoublyStochastic()
+    op = DoublyStochasticNormalize()
     with pytest.raises(ValueError, match="only supports modes"):
         op.apply(G0)
 
@@ -206,7 +206,7 @@ def test_doubly_stochastic_rejects_distances():
 def test_doubly_stochastic_all_zero_matrix_noop():
     A = sp.csr_matrix((4, 4), dtype=float)
     G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
-    op = DoublyStochastic()
+    op = DoublyStochasticNormalize()
     G = op.apply(G0)
     assert G.adj.nnz == 0
     assert G.adj.shape == (4, 4)
@@ -219,7 +219,7 @@ def test_doubly_stochastic_preserves_flags_and_copies_metadata():
     A = _csr([0.4, 0.6, 0.3], [0, 1, 2], [1, 2, 0], 3)
     G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta, sym_op="max")
 
-    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000, copy_meta=True)
+    op = DoublyStochasticNormalize(tolerance=1e-6, max_iter=10_000, copy_meta=True)
     G = op.apply(G0)
 
     # Flags
