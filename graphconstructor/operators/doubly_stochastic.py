@@ -1,8 +1,8 @@
+import warnings
 from dataclasses import dataclass
 import networkx as nx
 import numpy as np
 import scipy.sparse as sp
-import warnings
 from ..graph import Graph
 from .base import GraphOperator
 
