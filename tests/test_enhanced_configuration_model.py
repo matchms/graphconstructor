@@ -3,7 +3,11 @@ import pytest
 import scipy.sparse as sp
 from graphconstructor import Graph
 from graphconstructor.operators import EnhancedConfigurationModelFilter
-from graphconstructor.operators.enhanced_configuration_model import _neg_log_likelihood, _neg_log_likelihood_grad
+from graphconstructor.operators.enhanced_configuration_model import (
+    _convert_undirected_similarity_to_ecm_weights,
+    _neg_log_likelihood,
+    _neg_log_likelihood_grad,
+)
 
 
 def _csr(*, data, rows, cols, n):
@@ -62,7 +66,6 @@ def test_ecm_rejects_directed_graph():
 
 @pytest.mark.parametrize("alpha", [0.01, 0.05, 0.5, 1.0])
 def test_ecm_output_graph_basic_invariants_undirected(small_undirected_graph, alpha):
-    np.random.seed(0)
     op = EnhancedConfigurationModelFilter(alpha=alpha)
     Gp = op.apply(small_undirected_graph)
 
@@ -92,7 +95,6 @@ def test_ecm_ignores_input_self_loops():
 
     G = Graph.from_csr(A.tocsr(), directed=False, weighted=True, mode="similarity")
 
-    np.random.seed(0)
     op = EnhancedConfigurationModelFilter()
     Gp = op.apply(G)
 
@@ -104,7 +106,6 @@ def test_ecm_output_edges_are_subset_of_input_edges(small_undirected_graph):
     """
     Thresholding may remove observed edges, but must never introduce new ones.
     """
-    np.random.seed(0)
     op = EnhancedConfigurationModelFilter(alpha=0.5)
     Gp = op.apply(small_undirected_graph)
 
@@ -123,7 +124,6 @@ def test_ecm_alpha_one_keeps_all_existing_edges(small_undirected_graph):
     Since ECM p-values should lie in [0, 1], alpha=1 should keep all observed
     off-diagonal edges.
     """
-    np.random.seed(0)
     op = EnhancedConfigurationModelFilter(alpha=1.0)
     Gp = op.apply(small_undirected_graph)
 
@@ -139,17 +139,21 @@ def test_ecm_alpha_one_keeps_all_existing_edges(small_undirected_graph):
 
 @pytest.mark.parametrize("alpha", [1e-6, 1e-3, 1e-2])
 def test_ecm_smaller_alpha_cannot_increase_number_of_edges(small_undirected_graph, alpha):
-    np.random.seed(0)
-    G_loose = EnhancedConfigurationModelFilter(alpha=1.0).apply(small_undirected_graph)
-    np.random.seed(0)
-    G_strict = EnhancedConfigurationModelFilter(alpha=alpha).apply(small_undirected_graph)
+    G_loose = EnhancedConfigurationModelFilter(
+        alpha=1.0,
+        random_state=0,
+        ).apply(small_undirected_graph)
+    G_strict = EnhancedConfigurationModelFilter(
+        alpha=alpha,
+        random_state=0,
+        ).apply(small_undirected_graph)
 
     assert G_strict.adj.nnz <= G_loose.adj.nnz
 
 
 def test_ecm_default_keeps_original_weights_for_retained_edges(small_undirected_graph):
-    np.random.seed(0)
-    op = EnhancedConfigurationModelFilter(alpha=1.0, replace_weights_by_p_values=False)
+    op = EnhancedConfigurationModelFilter(
+        alpha=1.0, replace_weights_by_p_values=False, random_state=0)
     Gp = op.apply(small_undirected_graph)
 
     Win = small_undirected_graph.adj.tocsr()
@@ -163,8 +167,9 @@ def test_ecm_default_keeps_original_weights_for_retained_edges(small_undirected_
 
 
 def test_ecm_can_replace_weights_by_p_values(small_undirected_graph):
-    np.random.seed(0)
-    op = EnhancedConfigurationModelFilter(alpha=1.0, replace_weights_by_p_values=True)
+    op = EnhancedConfigurationModelFilter(
+        alpha=1.0, replace_weights_by_p_values=True, random_state=0
+        )
     Gp = op.apply(small_undirected_graph)
 
     Wp = Gp.adj.tocsr()
@@ -180,13 +185,15 @@ def test_ecm_can_replace_weights_by_p_values(small_undirected_graph):
 
 
 def test_ecm_reproducible_given_fixed_seed(small_undirected_graph):
-    op = EnhancedConfigurationModelFilter(alpha=0.5, replace_weights_by_p_values=True)
+    op = EnhancedConfigurationModelFilter(
+        alpha=0.5,
+        replace_weights_by_p_values=True,
+        random_state=123,
+        )
 
-    np.random.seed(123)
     Gp1 = op.apply(small_undirected_graph)
     W1 = Gp1.adj.tocsr()
 
-    np.random.seed(123)
     Gp2 = op.apply(small_undirected_graph)
     W2 = Gp2.adj.tocsr()
 
@@ -271,6 +278,7 @@ def test_ecm_alpha_thresholding_exact_edge_counts(monkeypatch):
 
     def fake_pval_matrix_data(x, y, row, col, weights):
         assert len(weights) == 3
+        assert np.all(weights >= 1.0)
         return fake_pvals.copy()
 
     def fake_make_objective(*args, **kwargs):
@@ -305,3 +313,88 @@ def test_ecm_alpha_thresholding_exact_edge_counts(monkeypatch):
         op = EnhancedConfigurationModelFilter(alpha=alpha)
         Gp = op.apply(G)
         assert Gp.adj.nnz == expected_nnz
+
+def test_ecm_quantile_weight_conversion_preserves_support_symmetry_and_ties():
+    # Lower-triangle observed values are:
+    # (1, 0) = 0.2
+    # (2, 0) = 0.2  -> tie with first edge
+    # (2, 1) = 0.8
+    A = _csr(
+        data=[0.2, 0.2, 0.2, 0.2, 0.8, 0.8],
+        rows=[0, 1, 0, 2, 1, 2],
+        cols=[1, 0, 2, 0, 2, 1],
+        n=3,
+    )
+
+    W = _convert_undirected_similarity_to_ecm_weights(
+        A.tocsr(),
+        method="quantile",
+        n_bins=10,
+    ).tocsr()
+
+    # Output remains symmetric.
+    assert (W != W.T).nnz == 0
+
+    # Support is unchanged.
+    assert ((W != 0).astype(np.int8) != (A != 0).astype(np.int8)).nnz == 0
+
+    # Equal input similarities should receive equal pseudo-counts.
+    assert W[1, 0] == W[2, 0]
+
+    # Larger similarity should receive a larger pseudo-count.
+    assert W[2, 1] > W[1, 0]
+
+    # Converted weights are positive integer-valued floats.
+    assert np.all(W.data >= 1.0)
+    assert np.allclose(W.data, np.round(W.data))
+
+
+def test_ecm_linear_weight_conversion_scales_to_bins():
+    A = _csr(
+        data=[0.25, 0.25, 0.5, 0.5, 1.0, 1.0],
+        rows=[0, 1, 0, 2, 1, 2],
+        cols=[1, 0, 2, 0, 2, 1],
+        n=3,
+    )
+
+    W = _convert_undirected_similarity_to_ecm_weights(
+        A.tocsr(),
+        method="linear",
+        n_bins=4,
+    ).tocsr()
+
+    assert W[1, 0] == 1.0   # ceil(4 * 0.25 / 1.0)
+    assert W[2, 0] == 2.0   # ceil(4 * 0.5 / 1.0)
+    assert W[2, 1] == 4.0   # ceil(4 * 1.0 / 1.0)
+
+    assert (W != W.T).nnz == 0
+
+
+def test_ecm_default_conversion_keeps_original_weights_in_output():
+    A = _csr(
+        data=[0.2, 0.2, 0.7, 0.7, 1.0, 1.0],
+        rows=[0, 1, 0, 2, 1, 2],
+        cols=[1, 0, 2, 0, 2, 1],
+        n=3,
+    )
+    G = Graph.from_csr(A, directed=False, weighted=True, mode="similarity")
+
+    op = EnhancedConfigurationModelFilter(
+        alpha=1.0,
+        replace_weights_by_p_values=False,
+        random_state=0,
+    )
+
+    Gp = op.apply(G)
+
+    Win = G.adj.tocsr()
+    Wout = Gp.adj.tocsr()
+
+    # With alpha=1, all observed off-diagonal edges should remain.
+    assert np.array_equal(Wout.indices, Win.indices)
+    assert np.array_equal(Wout.indptr, Win.indptr)
+
+    # Returned weights should be the original similarities, not the internal
+    # pseudo-counts.
+    assert np.allclose(Wout.data, Win.data)
+    assert np.all(Wout.data <= 1.0)
