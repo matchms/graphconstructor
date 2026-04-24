@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import networkx as nx
 import numpy as np
 import scipy.sparse as sp
+import warnings
 from ..graph import Graph
 from .base import GraphOperator
 
@@ -66,7 +67,7 @@ class DoublyStochasticNormalize(GraphOperator):
         row_has_edges = np.array(A.sum(axis=1) > 0).T[0]
         col_has_edges = np.array(A.sum(axis=0) > 0)[0]
 
-        # The csc conversions above could be heavy; build once
+        # Build transposed CSR once for repeated column-sum products
         A_T = A.T.tocsr(copy=False)
 
         min_thres = 1.0 - self.tolerance
@@ -75,12 +76,18 @@ class DoublyStochasticNormalize(GraphOperator):
         # Parameter for stabilization
         MAX_FACTOR = 1e50
 
+        converged = False
         for _ in range(self.max_iter):
             c[col_has_edges] = 1 / A_T.dot(r)[col_has_edges]
             r[row_has_edges] = 1 / A.dot(c)[row_has_edges]
 
             if np.any(np.abs(r) > MAX_FACTOR) or np.any(np.abs(c) > MAX_FACTOR):
-                break  # avoid overflow; close enough
+                warnings.warn(
+                    "DoublyStochasticNormalize stopped early because scaling factors "
+                    "became very large. Result may not be doubly stochastic.",
+                    RuntimeWarning,
+                )
+                break
 
             # Convergence check (band and tol)
             row_sums = r * (A.dot(c))
@@ -104,7 +111,14 @@ class DoublyStochasticNormalize(GraphOperator):
                 cols_ok = True
 
             if rows_ok and cols_ok:
+                converged = True
                 break
+
+        if not converged:
+            warnings.warn(
+                "DoublyStochasticNormalize did not converge within max_iter.",
+                RuntimeWarning,
+            )
 
         # Apply scaling once: A' = diag(r) * A * diag(c)  (CSR-friendly)
         A_scaled = A.copy()
@@ -115,6 +129,9 @@ class DoublyStochasticNormalize(GraphOperator):
         # col scaling
         A_scaled.data *= c[A_scaled.indices]
 
+        # TODO: For undirected graphs, Graph.from_csr symmetrizes A_scaled again.
+        # This may change row/column sums after normalization. A future revision should
+        # either use symmetric scaling or allow Graph construction without re-symmetrizing.
         return Graph.from_csr(
             A_scaled,
             directed=G.directed,
@@ -131,8 +148,9 @@ class DoublyStochasticBackbone(GraphOperator):
     Backbone extraction based on doubly-stochastic edge scores.
 
     First applies DoublyStochasticNormalize, then sorts edges by normalized score
-    and adds strongest edges until the graph becomes connected, following the
-    behavior of the previous DoublyStochastic(backbone_method=True) branch.
+    and adds strongest edges until the graph becomes connected, or until no candidate
+    edges remain. For disconnected inputs, the result is a strongest-edge forest
+    over the available components.
 
     References
     ----------
@@ -176,6 +194,8 @@ class DoublyStochasticBackbone(GraphOperator):
         G_csr = nx.to_scipy_sparse_array(
             G_filtered,
             nodelist=list(range(G.n_nodes)),
+            weight="weight",
+            format="csr",
         )
 
         return Graph.from_csr(
@@ -214,7 +234,7 @@ class DoublyStochasticBackbone(GraphOperator):
         order = np.argsort(vals)[::-1]
 
         for idx in order:
-            if nx.is_connected(G_filtered):
+            if nx.is_connected(G_filtered):  # TODO: For large graphs, this check could be expensive
                 break
 
             G_filtered.add_edge(
