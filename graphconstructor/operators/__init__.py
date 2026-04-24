@@ -1,6 +1,6 @@
 from .base import GraphOperator
 from .disparity import DisparityFilter
-from .doubly_stochastic import DoublyStochasticNormalize, DoublyStochasticBackbone
+from .doubly_stochastic import DoublyStochasticBackbone, DoublyStochasticNormalize
 from .knn_selector import KNNSelector
 from .locally_adaptive_sparsification import LocallyAdaptiveSparsification
 from .marginal_likelihood import MarginalLikelihoodFilter

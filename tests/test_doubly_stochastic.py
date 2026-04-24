@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 import scipy.sparse as sp
 from graphconstructor import Graph
-from graphconstructor.operators import DoublyStochasticNormalize, DoublyStochasticBackbone
+from graphconstructor.operators import DoublyStochasticBackbone, DoublyStochasticNormalize
 
 
 def _csr(data, rows, cols, n):
