@@ -48,16 +48,17 @@ This will usually be followed by a custom combination of one or multiple **opera
   * `DoublyStochasticNormalize(tolerance=1e-5, max_iter=10000)`  
     **Sinkhorn–Knopp** alternating row/column normalization to make the adjacency (approximately) **doubly stochastic** without densifying (CSR-only). Can be useful as a normalization step before backboning/thresholding.  
     Ref: Sinkhorn (1964); discussed in Coscia, "The Atlas for the Inspiring Network Scientist" (2025).
-  * `DoublyStochasticBackbone(tolerance=1e-5, max_iter=10000)`
+  * `DoublyStochasticBackbone(tolerance=1e-5, max_iter=10000)`  
     First applies DoublyStochasticNormalize, then sorts edges by normalized score
-    and adds strongest edges until the graph becomes connected, or until no candidate
+    and adds the strongest edges until the graph becomes connected, or until no candidate
     edges remain. For disconnected inputs, the result is a strongest-edge forest
     over the available components.
   * `DisparityFilter(alpha=0.05, rule="or"|"and")`  
     **Disparity Filter** algorithm for graphs with continuous weights. Tests each edge against a node-wise null (Dirichlet/Beta split of strength). Undirected edges can be kept if either (“or”, default) or both (“and”) endpoints deem them significant.  
     Ref: Serrano, Boguñá, Vespignani, "Extracting the multiscale backbone of complex weighted networks", PNAS 2009.
   * `EnhancedConfigurationModelFilter(alpha=0.05)`  
-    Extract a weighted undirected backbone using the Enhanced Configuration Model (**ECM**). Based on the work by Gemmetto et al. (2017).
+    Extract a weighted undirected backbone using the Enhanced Configuration Model (**ECM**).
+    Based on the work by Gemmetto et al. (2017).
   * `LocallyAdaptiveSparsification(alpha=0.05, rule="or"|"and")`  
     Implementation of the **Locally Adaptive Network Sparsification (LANS)** algorithm, which does not assume any particular null model. Instead, the distribution of similarity weights is used to determine and then retain statistically significant edges.  
     Ref: Foti, Hughes, Rockmore, "Nonparametric Sparsification of Complex Multiscale Networks", 2011, https://doi.org/10.1371/journal.pone.0016431
