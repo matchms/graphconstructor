@@ -247,6 +247,12 @@ class EnhancedConfigurationModelFilter(GraphOperator):
         Note that in this case smaller weights indicate higher statistical
         significance, which differs from the usual interpretation of
         similarity weights.
+    weight_conversion : {"auto", "quantile", "linear", None}, default="auto"
+        Strategy for resolving ECM model weights. ``"auto"`` uses observed weights
+        unchanged when they look like positive integer counts and otherwise converts
+        normalized similarities in [0, 1] using the quantile strategy. Use
+        ``None`` to force raw weights, or ``"quantile"``/``"linear"`` to force
+        pseudo-count conversion.
     copy_meta : bool, default=True
         If ``True``, copy graph metadata to the returned graph. If ``False``,
         keep the original metadata reference.
@@ -270,6 +276,9 @@ class EnhancedConfigurationModelFilter(GraphOperator):
     copy_meta: bool = True
     x_transform_idx: int = 0
     y_transform_idx: int = 0
+    weight_conversion: str = "auto"
+    n_weight_bins: int = 100
+    random_state: int | None = None
 
     supported_modes = ["similarity"]
 
@@ -282,11 +291,32 @@ class EnhancedConfigurationModelFilter(GraphOperator):
         if not (0.0 < self.alpha <= 1.0):
             raise ValueError("alpha must satisfy 0 < alpha <= 1.")
 
-        W = G.adj.copy().tocsr()
-        W -= sp.diags(W.diagonal())
+        W_original = G.adj.copy().tocsr()
+        W_original -= sp.diags(W_original.diagonal())
+        W_original.eliminate_zeros()
 
-        k = np.asarray((W > 0).sum(axis=1)).ravel().astype(np.float64)
-        s = np.asarray(W.sum(axis=1)).ravel().astype(np.float64)
+        if W_original.data.size and np.any(W_original.data < 0):
+            raise ValueError("EnhancedConfigurationModelFilter requires nonnegative weights.")
+
+        W_lower_original = sp.tril(W_original, k=-1).tocoo()
+        observed_weights = W_lower_original.data
+
+        conversion_method = _resolve_weight_conversion_method(
+            observed_weights,
+            self.weight_conversion,
+        )
+
+        if conversion_method is None:
+            W_model = W_original
+        else:
+            W_model = _convert_undirected_similarity_to_ecm_weights(
+                W_original,
+                method=conversion_method,
+                n_bins=self.n_weight_bins,
+            )
+
+        k = np.asarray((W_model > 0).sum(axis=1)).ravel().astype(np.float64)
+        s = np.asarray(W_model.sum(axis=1)).ravel().astype(np.float64)
 
         num_nodes = G.n_nodes
 
@@ -296,7 +326,8 @@ class EnhancedConfigurationModelFilter(GraphOperator):
        # ---- Initial guess (option 5 from original) ----------------------
         num_edges = k.sum() / 2.0
         x0_bounded = k / np.sqrt(max(num_edges, EPS))
-        y0_bounded = np.random.random(num_nodes)
+        rng = np.random.default_rng(self.random_state)
+        y0_bounded = rng.random(num_nodes)
 
         # Clip to valid domain before applying inverse transform
         lower = np.full(2 * num_nodes, EPS)
@@ -339,20 +370,31 @@ class EnhancedConfigurationModelFilter(GraphOperator):
         y_opt = y_transform(res.x[num_nodes:])
 
         # Work only on the lower triangle to avoid double computation
-        W_lower = sp.tril(W, k=-1).tocoo()
-        row = W_lower.row.astype(np.int64)
-        col = W_lower.col.astype(np.int64)
-        weights = W_lower.data
+        W_lower_model = sp.tril(W_model, k=-1).tocoo()
+        row = W_lower_model.row.astype(np.int64)
+        col = W_lower_model.col.astype(np.int64)
+        weights_model = W_lower_model.data
 
-        pvals = _pval_matrix_data(x_opt, y_opt, row, col, weights)
+        pvals = _pval_matrix_data(x_opt, y_opt, row, col, weights_model)
         keep = pvals <= self.alpha
 
-        out_data = pvals[keep] if self.replace_weights_by_p_values else weights[keep]
+        W_lower_original = sp.tril(W_original, k=-1).tocoo()
+        original_lookup = {
+            (int(i), int(j)): w
+            for i, j, w in zip(W_lower_original.row, W_lower_original.col, W_lower_original.data)
+        }
+
+        original_weights = np.array(
+            [original_lookup[(int(i), int(j))] for i, j in zip(row, col)],
+            dtype=W_original.dtype,
+        )
+
+        out_data = pvals[keep] if self.replace_weights_by_p_values else original_weights[keep]
 
         W_backbone = sp.csr_matrix(
             (out_data, (row[keep], col[keep])),
             shape=(num_nodes, num_nodes),
-            dtype=np.float64 if self.replace_weights_by_p_values else W.dtype,
+            dtype=np.float64 if self.replace_weights_by_p_values else W_original.dtype,
         )
         W_backbone = W_backbone + W_backbone.T
 
@@ -372,3 +414,119 @@ class EnhancedConfigurationModelFilter(GraphOperator):
             return self._directed(G)
         else:
             return self._undirected(G)
+
+
+def _weights_are_positive_integer_counts(
+    values: np.ndarray,
+    *,
+    atol: float = 1e-12,
+) -> bool:
+    """Return True if all observed weights look like positive integer counts."""
+    if values.size == 0:
+        return True
+
+    return bool(
+        np.all(values > 0)
+        and np.allclose(values, np.round(values), atol=atol, rtol=0.0)
+    )
+
+
+def _weights_look_like_normalized_similarities(
+    values: np.ndarray,
+    *,
+    atol: float = 1e-12,
+) -> bool:
+    """Return True if weights look like continuous similarities in (0, 1]."""
+    if values.size == 0:
+        return False
+
+    return bool(
+        np.all(values >= 0)
+        and np.nanmax(values) <= 1.0 + atol
+        and not _weights_are_positive_integer_counts(values, atol=atol)
+    )
+
+
+def _resolve_weight_conversion_method(
+    values: np.ndarray,
+    requested: str,
+) -> str:
+    """
+    Resolve the effective ECM weight conversion method.
+
+    Returns one of {None, 'quantile', 'linear'}.
+    """
+    if requested is None:
+        return None
+
+    valid = {"auto", "quantile", "linear"}
+    if requested not in valid:
+        raise ValueError(
+            "weight_conversion must be one of "
+            "{'auto', 'quantile', 'linear'}."
+        )
+
+    if requested != "auto":
+        return requested
+
+    if _weights_are_positive_integer_counts(values):
+        return None
+
+    if _weights_look_like_normalized_similarities(values):
+        return "quantile"
+
+    raise ValueError(
+        "Could not automatically determine how to use ECM weights. "
+        "Observed weights are neither positive integer counts nor normalized "
+        "similarities in [0, 1]. Set weight_conversion explicitly to one of "
+        "{'quantile', 'linear'}."
+    )
+
+
+def _convert_undirected_similarity_to_ecm_weights(
+    W: sp.csr_matrix,
+    *,
+    method: str = "quantile",
+    n_bins: int = 100,
+) -> sp.csr_matrix:
+    W_lower = sp.tril(W, k=-1).tocoo()
+
+    if W_lower.nnz == 0:
+        return sp.csr_matrix(W.shape, dtype=np.float64)
+
+    values = W_lower.data
+
+    if np.any(values < 0):
+        raise ValueError("ECM weight conversion requires nonnegative weights.")
+
+    if method == "quantile":
+        unique_values, inverse = np.unique(values, return_inverse=True)
+
+        if unique_values.size == 1:
+            converted = np.ones_like(values, dtype=np.float64)
+        else:
+            percentiles = inverse.astype(np.float64) / (unique_values.size - 1)
+            converted = 1.0 + np.floor((n_bins - 1) * percentiles)
+
+    elif method == "linear":
+        vmax = values.max()
+        if vmax <= 0:
+            converted = np.ones_like(values, dtype=np.float64)
+        else:
+            converted = np.ceil(n_bins * values / vmax)
+            converted = np.maximum(converted, 1.0)
+
+    elif method == "none":
+        converted = values.astype(np.float64, copy=True)
+
+    else:
+        raise ValueError(
+            "weight_conversion must be one of {'quantile', 'linear', 'none'}."
+        )
+
+    W_conv = sp.csr_matrix(
+        (converted, (W_lower.row, W_lower.col)),
+        shape=W.shape,
+        dtype=np.float64,
+    )
+    return W_conv + W_conv.T
