@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 import scipy.sparse as sp
 from graphconstructor import Graph
-from graphconstructor.operators import DoublyStochastic
+from graphconstructor.operators import DoublyStochasticBackbone, DoublyStochasticNormalize
 
 
 def _csr(data, rows, cols, n):
@@ -16,17 +16,20 @@ def _csr(data, rows, cols, n):
 # ----------------- Positive dense matrix: converges to ~doubly stochastic -----------------
 def test_doubly_stochastic_converges_on_positive_dense():
     # Strictly positive, symmetric 4x4 (undirected)
-    M = np.array([
-        [0.2, 0.8, 0.5, 0.3],
-        [0.7, 0.1, 0.4, 0.6],
-        [0.3, 0.9, 0.2, 0.5],
-        [0.5, 0.2, 0.7, 0.4],
-    ], dtype=float)
+    M = np.array(
+        [
+            [0.2, 0.8, 0.5, 0.3],
+            [0.7, 0.1, 0.4, 0.6],
+            [0.3, 0.9, 0.2, 0.5],
+            [0.5, 0.2, 0.7, 0.4],
+        ],
+        dtype=float,
+    )
     # Zero the diagonal (typical adjacency semantics)
     np.fill_diagonal(M, 0.0)
 
     G0 = Graph.from_dense(M, directed=False, weighted=True, mode="similarity", sym_op="max")
-    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
+    op = DoublyStochasticNormalize(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
 
     A = G.adj
@@ -43,6 +46,53 @@ def test_doubly_stochastic_converges_on_positive_dense():
     assert not G.directed and G.weighted
 
 
+def test_doubly_stochastic_with_backbone_method():
+    # Strictly positive, asymmetric matrix (to make backbone relevant)
+    M = np.array(
+        [
+            [0.2, 0.8, 0.5, 0.3],
+            [0.7, 0.1, 0.4, 0.6],
+            [0.3, 0.9, 0.2, 0.5],
+            [0.5, 0.2, 0.7, 0.4],
+        ],
+        dtype=float,
+    )
+
+    # Zero diagonal
+    np.fill_diagonal(M, 0.0)
+
+    G0 = Graph.from_dense(
+        M,
+        directed=False,
+        weighted=True,
+        mode="similarity",
+        sym_op="max",
+    )
+
+    op = DoublyStochasticBackbone(tolerance=1e-6, max_iter=10_000)
+
+    G = op.apply(G0)
+    A = G.adj
+
+    # No NaNs or infs
+    assert np.isfinite(A.data).all()
+
+    # Backbone should be no denser than original graph
+    assert A.nnz <= G0.adj.nnz
+
+    # For this connected 4-node graph, the backbone should connect all nodes.
+    assert G.is_connected()
+
+    # The backbone implementation adds strongest edges until
+    # connected, a connected undirected graph should end up with at least n-1
+    # and at most the original number of edges.
+    assert G.n_edges >= G.n_nodes - 1
+    assert G.n_edges <= G0.n_edges
+
+    # Graph properties preserved
+    assert not G.directed and G.weighted
+
+
 # ----------------- Sparse graph with isolates: zero rows/cols remain zero, others ~1 -----------------
 def test_doubly_stochastic_sparse_with_isolates():
     # 5 nodes, node 4 is isolated
@@ -54,7 +104,7 @@ def test_doubly_stochastic_sparse_with_isolates():
     )
     G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
 
-    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
+    op = DoublyStochasticNormalize(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
     A2 = G.adj
 
@@ -65,7 +115,7 @@ def test_doubly_stochastic_sparse_with_isolates():
     col_sums = np.asarray(A2.sum(axis=0)).ravel()
 
     # Indices with edges
-    rows_with = (np.diff(A2.indptr) > 0)
+    rows_with = np.diff(A2.indptr) > 0
     cols_with = (sp.csc_matrix(A2).indptr[1:] - sp.csc_matrix(A2).indptr[:-1]) > 0
 
     # Non-isolated rows/cols sum ~1
@@ -81,6 +131,92 @@ def test_doubly_stochastic_sparse_with_isolates():
     assert not G.directed and G.weighted
 
 
+def test_doubly_stochastic_sparse_with_isolates_backbone():
+    A = _csr(
+        data=[0.4, 0.6, 0.3, 0.7, 0.2, 0.5],
+        rows=[0, 0, 1, 1, 2, 3],
+        cols=[1, 2, 2, 3, 3, 2],
+        n=5,
+    )
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
+
+    op = DoublyStochasticBackbone(tolerance=1e-6, max_iter=10_000)
+    G = op.apply(G0)
+    A2 = G.adj
+
+    assert np.isfinite(A2.data).all()
+
+    row_sums = np.asarray(A2.sum(axis=1)).ravel()
+    col_sums = np.asarray(A2.sum(axis=0)).ravel()
+    rows_with = np.diff(A2.indptr) > 0
+    cols_with = (sp.csc_matrix(A2).indptr[1:] - sp.csc_matrix(A2).indptr[:-1]) > 0
+
+    if rows_with.any():
+        assert np.all(row_sums[rows_with] > 0)
+    if cols_with.any():
+        assert np.all(col_sums[cols_with] > 0)
+
+    # Isolated node (4) stays isolated but is still part of the graph
+    G_nx = G.to_networkx()
+
+    assert len(row_sums) == 5
+    assert len(G_nx.edges(4)) == 0
+
+
+def test_doubly_stochastic_backbone_keeps_adding_edges_until_connected():
+    # This graph has two very strong edges, 0--1 and 2--3, plus one weak
+    # bridge, 1--2. 
+    A = _csr(
+        data=[100.0, 100.0, 100.0, 100.0, 1.0, 1.0],
+        rows=[0, 1, 2, 3, 1, 2],
+        cols=[1, 0, 3, 2, 2, 1],
+        n=4,
+    )
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
+
+    op = DoublyStochasticBackbone(tolerance=1e-6, max_iter=10_000)
+    G = op.apply(G0)
+
+    assert G.is_connected()
+    assert G.n_edges == 3
+
+    # The weak bridge is required for connectivity and should not be skipped.
+    assert G.adj[1, 2] > 0
+    assert G.adj[2, 1] > 0
+
+
+def test_doubly_stochastic_backbone_preserves_node_order_after_networkx_conversion():
+    # Node 4 is part of the strongest edge. Without an explicit nodelist in
+    # nx.to_scipy_sparse_array, NetworkX insertion order can remap this edge
+    # to different matrix indices.
+    A = _csr(
+        data=[10.0, 10.0, 1.0, 1.0, 1.0, 1.0],
+        rows=[0, 4, 0, 1, 1, 4],
+        cols=[4, 0, 1, 0, 4, 1],
+        n=5,
+    )
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
+
+    op = DoublyStochasticBackbone(tolerance=1e-6, max_iter=10_000)
+    G = op.apply(G0)
+
+    assert G.adj.shape == (5, 5)
+
+    # Node labels should still correspond to the original matrix indices.
+    # In particular, node 4 should still be connected to the component,
+    # not silently remapped to another row/column.
+    assert G.adj[0, 4] > 0 or G.adj[1, 4] > 0
+    assert np.asarray(G.adj[4].sum()).ravel()[0] > 0
+
+    # Node 2 and node 3 were isolated in the input and should remain isolated.
+    row_sums = np.asarray(G.adj.sum(axis=1)).ravel()
+    col_sums = np.asarray(G.adj.sum(axis=0)).ravel()
+
+    assert row_sums[2] == 0.0
+    assert col_sums[2] == 0.0
+    assert row_sums[3] == 0.0
+    assert col_sums[3] == 0.0
+
 # ----------------- Directed case: rows and cols ~1 for nonzero rows/cols -----------------
 def test_doubly_stochastic_directed_graph_unsolvable():
     # Directed 4x4 with zeros on diagonal, not symmetric
@@ -93,19 +229,14 @@ def test_doubly_stochastic_directed_graph_unsolvable():
     )
     G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity")
 
-    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000)
+    op = DoublyStochasticNormalize(tolerance=1e-6, max_iter=10_000)
     G = op.apply(G0)
     A2 = G.adj
 
     # No NaNs or infs
     assert np.isfinite(A2.data).all()
 
-    expected_result = np.array([
-        [0. , 0.5, 0.5, 0. ],
-        [0. , 0. , 1. , 0. ],
-        [0.5, 0. , 0. , 0.5],
-        [0. , 1. , 0. , 0. ]
-        ])
+    expected_result = np.array([[0.0, 0.5, 0.5, 0.0], [0.0, 0.0, 1.0, 0.0], [0.5, 0.0, 0.0, 0.5], [0.0, 1.0, 0.0, 0.0]])
     assert np.allclose(A2.toarray(), expected_result, atol=1e-4)
 
     # Directed flag preserved
@@ -116,7 +247,7 @@ def test_doubly_stochastic_directed_graph_unsolvable():
 def test_doubly_stochastic_rejects_negative_weights():
     A = _csr([-0.2, 0.5], [0, 1], [1, 0], 2)
     G0 = Graph.from_csr(A, directed=True, weighted=True, mode="similarity", sym_op="max")
-    op = DoublyStochastic()
+    op = DoublyStochasticNormalize()
     with pytest.raises(ValueError, match="nonnegative"):
         op.apply(G0)
 
@@ -124,7 +255,7 @@ def test_doubly_stochastic_rejects_negative_weights():
 def test_doubly_stochastic_rejects_distances():
     A = _csr([0.2, 0.5], [0, 1], [1, 0], 2)
     G0 = Graph.from_csr(A, directed=True, weighted=True, mode="distance", sym_op="max")
-    op = DoublyStochastic()
+    op = DoublyStochasticNormalize()
     with pytest.raises(ValueError, match="only supports modes"):
         op.apply(G0)
 
@@ -133,7 +264,7 @@ def test_doubly_stochastic_rejects_distances():
 def test_doubly_stochastic_all_zero_matrix_noop():
     A = sp.csr_matrix((4, 4), dtype=float)
     G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", sym_op="max")
-    op = DoublyStochastic()
+    op = DoublyStochasticNormalize()
     G = op.apply(G0)
     assert G.adj.nnz == 0
     assert G.adj.shape == (4, 4)
@@ -146,7 +277,7 @@ def test_doubly_stochastic_preserves_flags_and_copies_metadata():
     A = _csr([0.4, 0.6, 0.3], [0, 1, 2], [1, 2, 0], 3)
     G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta, sym_op="max")
 
-    op = DoublyStochastic(tolerance=1e-6, max_iter=10_000, copy_meta=True)
+    op = DoublyStochasticNormalize(tolerance=1e-6, max_iter=10_000, copy_meta=True)
     G = op.apply(G0)
 
     # Flags
