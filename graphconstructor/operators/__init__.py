@@ -1,6 +1,7 @@
 from .base import GraphOperator
 from .disparity import DisparityFilter
 from .doubly_stochastic import DoublyStochastic
+from .enhanced_configuration_model import EnhancedConfigurationModelFilter
 from .knn_selector import KNNSelector
 from .locally_adaptive_sparsification import LocallyAdaptiveSparsification
 from .marginal_likelihood import MarginalLikelihoodFilter
@@ -19,4 +20,5 @@ __all__ = [
     "MinimumSpanningTree",
     "NoiseCorrected",
     "WeightThreshold",
+    "EnhancedConfigurationModelFilter",
 ]
