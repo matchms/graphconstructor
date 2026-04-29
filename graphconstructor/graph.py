@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass
 from typing import Iterable, Literal, Optional, Sequence
+import networkx as nx
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
@@ -239,10 +240,6 @@ class Graph:
         - Graph-level attributes 'mode', 'directed', 'weighted',
           'ignore_selfloops', and 'keep_explicit_zeros' are honored if present.
         """
-        try:
-            import networkx as nx  # lazy import
-        except Exception as e:
-            raise ImportError("networkx is required for from_graphml().") from e
 
         if default_mode not in {"distance", "similarity"}:
             raise ValueError(
@@ -496,10 +493,6 @@ class Graph:
             'mode', 'directed', 'weighted', 'ignore_selfloops',
             and 'keep_explicit_zeros' in the GraphML file.
         """
-        try:
-            import networkx as nx  # lazy import
-        except Exception as e:
-            raise ImportError("networkx is required for to_graphml().") from e
 
         G_nx = self.to_networkx()
 
@@ -540,17 +533,6 @@ class Graph:
             ``"name"`` if present. Set to None to omit labels.
         edge_weight_attr
             Name of the edge weight attribute. Defaults to ``"weight"``.
-
-        Returns
-        -------
-        dict
-            Cytoscape.js-compatible JSON dictionary with ``elements.nodes`` and
-            ``elements.edges``.
-
-        Notes
-        -----
-        The output format is suitable for Cytoscape.js and can also be imported
-        by Cytoscape Desktop via JSON import workflows.
         """
 
         if node_id_col is not None:
