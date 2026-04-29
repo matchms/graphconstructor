@@ -1,5 +1,7 @@
+import json
 from dataclasses import dataclass
 from typing import Iterable, Literal, Optional, Sequence
+import networkx as nx
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
@@ -238,10 +240,6 @@ class Graph:
         - Graph-level attributes 'mode', 'directed', 'weighted',
           'ignore_selfloops', and 'keep_explicit_zeros' are honored if present.
         """
-        try:
-            import networkx as nx  # lazy import
-        except Exception as e:
-            raise ImportError("networkx is required for from_graphml().") from e
 
         if default_mode not in {"distance", "similarity"}:
             raise ValueError(
@@ -495,10 +493,6 @@ class Graph:
             'mode', 'directed', 'weighted', 'ignore_selfloops',
             and 'keep_explicit_zeros' in the GraphML file.
         """
-        try:
-            import networkx as nx  # lazy import
-        except Exception as e:
-            raise ImportError("networkx is required for to_graphml().") from e
 
         G_nx = self.to_networkx()
 
@@ -511,6 +505,117 @@ class Graph:
             G_nx.graph["keep_explicit_zeros"] = self.keep_explicit_zeros
 
         nx.write_graphml(G_nx, path)
+
+    def to_cytoscape(
+        self,
+        path=None,
+        *,
+        include_graph_attrs: bool = True,
+        node_id_col: str | None = None,
+        node_label_col: str | None = "name",
+        edge_weight_attr: str = "weight",
+    ) -> dict:
+        """
+        Export the graph in Cytoscape.js JSON format.
+
+        Parameters
+        ----------
+        path
+            Optional output path. If provided, the Cytoscape JSON is written to
+            this file. If None, the JSON-compatible dictionary is returned only.
+        include_graph_attrs
+            If True, include graph-level metadata under ``data``.
+        node_id_col
+            Optional metadata column to use as Cytoscape node IDs.
+            If None, integer node indices are used.
+        node_label_col
+            Optional metadata column to use as node labels. By default, uses
+            ``"name"`` if present. Set to None to omit labels.
+        edge_weight_attr
+            Name of the edge weight attribute. Defaults to ``"weight"``.
+        """
+
+        if node_id_col is not None:
+            if self.meta is None or node_id_col not in self.meta.columns:
+                raise KeyError(f"Column '{node_id_col}' not found in metadata.")
+            node_ids = self.meta[node_id_col].astype(str).tolist()
+        else:
+            node_ids = [str(i) for i in range(self.n_nodes)]
+
+        if len(set(node_ids)) != len(node_ids):
+            raise ValueError("Cytoscape node IDs must be unique.")
+
+        nodes = []
+        for i, node_id in enumerate(node_ids):
+            data = {
+                "id": node_id,
+                "index": int(i),
+            }
+
+            if (
+                node_label_col is not None
+                and self.meta is not None
+                and node_label_col in self.meta.columns
+            ):
+                data["label"] = self.meta.iloc[i][node_label_col]
+
+            if self.meta is not None:
+                for col in self.meta.columns:
+                    value = self.meta.iloc[i][col]
+                    if pd.isna(value):
+                        value = None
+                    data[col] = value
+
+            nodes.append({"data": data})
+
+        coo = self.adj.tocoo()
+
+        if self.directed:
+            edge_mask = coo.row != coo.col
+        else:
+            # Store each undirected edge only once.
+            edge_mask = coo.row < coo.col
+
+        rows = coo.row[edge_mask]
+        cols = coo.col[edge_mask]
+        values = coo.data[edge_mask]
+
+        edges = []
+        for edge_idx, (src, dst, value) in enumerate(zip(rows, cols, values)):
+            data = {
+                "id": f"e{edge_idx}",
+                "source": node_ids[int(src)],
+                "target": node_ids[int(dst)],
+            }
+
+            if self.weighted:
+                data[edge_weight_attr] = float(value)
+            else:
+                data[edge_weight_attr] = 1.0
+
+            edges.append({"data": data})
+
+        cytoscape = {
+            "elements": {
+                "nodes": nodes,
+                "edges": edges,
+            }
+        }
+
+        if include_graph_attrs:
+            cytoscape["data"] = {
+                "directed": bool(self.directed),
+                "weighted": bool(self.weighted),
+                "mode": self.mode,
+                "ignore_selfloops": self.ignore_selfloops,
+                "keep_explicit_zeros": self.keep_explicit_zeros,
+            }
+
+        if path is not None:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(cytoscape, f, indent=2)
+
+        return cytoscape
 
     # -------- Utilities --------
     def copy(self) -> "Graph":
