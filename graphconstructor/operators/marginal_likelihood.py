@@ -36,7 +36,7 @@ class MarginalLikelihoodFilter(GraphOperator):
         If True, self-loops are excluded from testing. Graph already drops
         self-loops by construction; this flag is here for clarity and future loopless
         corrections. Currently it only ensures i != j in filtering.
-    copy_meta : bool, default True
+    copy_metadata : bool, default True
         If True, copies metadata frame; set to False to reuse reference.
 
     Notes
@@ -50,7 +50,7 @@ class MarginalLikelihoodFilter(GraphOperator):
     alpha: float
     float_scaling: float = 20.
     assume_loopless: bool = False
-    copy_meta: bool = True
+    copy_metadata: bool = True
     supported_modes = ["similarity"]
 
     def _cast_weights_to_int(self, w: np.ndarray, max_weight=None) -> np.ndarray:
@@ -72,18 +72,20 @@ class MarginalLikelihoodFilter(GraphOperator):
         T = 0.5 * float(k.sum())  # total unit edges
         if T <= 0:
             # degenerate: no edges to keep
-            return Graph.from_csr(A.copy() * 0.0, directed=False, weighted=G.weighted,
-                                  mode=G.mode,
-                                  meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta,
-                                  sym_op="max")
+            return Graph.from_csr(
+                A.copy() * 0.0, directed=False, weighted=G.weighted,
+                mode=G.mode,
+                metadata=G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata,
+                sym_op="max")
 
         # Work on upper triangle to avoid double-testing undirected pairs
         Au = sp.triu(A, k=1).tocoo()
         if Au.nnz == 0:
-            return Graph.from_csr(A.copy() * 0.0, directed=False, weighted=G.weighted,
-                                  mode=G.mode,
-                                  meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta,
-                                  sym_op="max")
+            return Graph.from_csr(
+                A.copy() * 0.0, directed=False, weighted=G.weighted,
+                mode=G.mode,
+                metadata=G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata,
+                sym_op="max")
 
         # integerized realized weights
         w = self._cast_weights_to_int(Au.data, max_weight=Au.data.max())
@@ -114,10 +116,11 @@ class MarginalLikelihoodFilter(GraphOperator):
         data_full = np.concatenate([data, data])
 
         A_f = sp.csr_matrix((data_full, (rows_full, cols_full)), shape=A.shape)
-        return Graph.from_csr(A_f, directed=False, weighted=G.weighted,
-                              mode=G.mode,
-                              meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta,
-                              sym_op="max")
+        return Graph.from_csr(
+            A_f, directed=False, weighted=G.weighted,
+            mode=G.mode,
+            metadata=G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata,
+            sym_op="max")
 
     def _directed_filter(self, G: Graph) -> Graph:
         A = G.adj.tocsr(copy=False)
@@ -126,15 +129,17 @@ class MarginalLikelihoodFilter(GraphOperator):
         kin = np.asarray(A.sum(axis=0)).ravel()
         T = float(kout.sum())
         if T <= 0:
-            return Graph.from_csr(A.copy() * 0.0, directed=True, weighted=G.weighted,
-                                  mode=G.mode,
-                                  meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta)
+            return Graph.from_csr(
+                A.copy() * 0.0, directed=True, weighted=G.weighted,
+                mode=G.mode,
+                metadata=G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata)
 
         coo = A.tocoo()
         if coo.nnz == 0:
-            return Graph.from_csr(A.copy() * 0.0, directed=True, weighted=G.weighted,
-                                  mode=G.mode,
-                                  meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta)
+            return Graph.from_csr(
+                A.copy() * 0.0, directed=True, weighted=G.weighted,
+                mode=G.mode,
+                metadata=G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata)
 
         # Optionally exclude self-edges (currently Graph anyway drops them)
         if self.assume_loopless:
@@ -157,9 +162,10 @@ class MarginalLikelihoodFilter(GraphOperator):
         data = coo.data[keep] if G.weighted else np.ones(keep.sum(), dtype=float)
 
         A_f = sp.csr_matrix((data, (rows, cols)), shape=A.shape)
-        return Graph.from_csr(A_f, directed=True, weighted=G.weighted,
-                              mode=G.mode,
-                              meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta)
+        return Graph.from_csr(
+            A_f, directed=True, weighted=G.weighted,
+            mode=G.mode,
+            metadata=G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata)
 
     def apply(self, G: Graph) -> Graph:
         self._check_mode_supported(G)

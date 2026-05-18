@@ -23,12 +23,12 @@ class NoiseCorrected(GraphOperator):
         - "constant": g'(n) = 2*kappa / (kappa*n + 1)^2  (hold margins fixed)
         - "full":     g'(n) = 2*(kappa + n*dκ/dn) / (kappa*n + 1)^2, where
                       dκ/dn = 1/(Ni*Nj) - Ntot*(Ni+Nj)/(Ni*Nj)^2
-    copy_meta : bool
+    copy_metadata : bool
         If True, copy metadata DataFrame; otherwise keep reference.
     """
     delta: float = 1.64
     derivative: str = "constant"
-    copy_meta: bool = True
+    copy_metadata: bool = True
     supported_modes = ["similarity"]
 
     # ---------- Bayesian shrinkage for P_ij ----------
@@ -118,7 +118,7 @@ class NoiseCorrected(GraphOperator):
                 directed=True,
                 weighted=G.weighted,
                 mode=G.mode,
-                meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+                metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
             )
 
         row_sum = np.asarray(A.sum(axis=1)).ravel()
@@ -136,7 +136,7 @@ class NoiseCorrected(GraphOperator):
             directed=True,
             weighted=G.weighted,
             mode=G.mode,
-            meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+            metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
         )
 
     def _apply_undirected(self, G: Graph) -> Graph:
@@ -149,7 +149,7 @@ class NoiseCorrected(GraphOperator):
                 directed=False,
                 weighted=G.weighted,
                 mode=G.mode,
-                meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+                metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
                 sym_op="max",
             )
 
@@ -175,7 +175,7 @@ class NoiseCorrected(GraphOperator):
             directed=False,
             weighted=G.weighted,
             mode=G.mode,
-            meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+            metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
             sym_op="max",
         )
 

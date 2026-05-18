@@ -38,12 +38,12 @@ class DisparityFilter(GraphOperator):
         For undirected graphs only. If "or" (default), keep if either endpoint
         finds the edge significant (this matches the R backbone code).
         If "and", require both endpoints to be significant (stricter).
-    copy_meta : bool
+    copy_metadata : bool
         Copy metadata (True) or keep reference (False).
     """
     alpha: float = 0.05
     rule: UndirectedRule = "or"
-    copy_meta: bool = True
+    copy_metadata: bool = True
     supported_modes = ["similarity"]
 
     def _undirected(self, G: Graph) -> Graph:
@@ -51,10 +51,11 @@ class DisparityFilter(GraphOperator):
         if (A.data < 0).any():
             raise ValueError("DisparityFilter requires nonnegative weights.")
         if A.nnz == 0:
-            return Graph.from_csr(A.copy(), directed=False, weighted=G.weighted,
-                                  meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
-                                  mode="similarity",
-                                  sym_op="max")
+            return Graph.from_csr(
+                A.copy(), directed=False, weighted=G.weighted,
+                metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
+                mode="similarity",
+                sym_op="max")
 
         # strengths and degrees (row-wise)
         strength = np.asarray(A.sum(axis=1)).ravel()
@@ -92,18 +93,20 @@ class DisparityFilter(GraphOperator):
         A_f = sp.csr_matrix((w[keep], (rows[keep], cols[keep])), shape=A.shape)
         # Symmetrize to be safe (weights preserved as in input)
         A_f = A_f.maximum(A_f.T)
-        return Graph.from_csr(A_f, directed=False, weighted=G.weighted,
-                              mode=G.mode,
-                              meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
-                              sym_op="max")
+        return Graph.from_csr(
+            A_f, directed=False, weighted=G.weighted,
+            mode=G.mode,
+            metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
+            sym_op="max")
 
     def _directed(self, G: Graph) -> Graph:
         A = G.adj.tocsr(copy=False)
         if (A.data < 0).any():
             raise ValueError("DisparityFilter requires nonnegative weights.")
         if A.nnz == 0:
-            return Graph.from_csr(A.copy(), directed=True, weighted=G.weighted,
-                                  meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta))
+            return Graph.from_csr(
+                A.copy(), directed=True, weighted=G.weighted,
+                metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata))
 
 
         s_out = np.asarray(A.sum(axis=1)).ravel()
@@ -132,9 +135,10 @@ class DisparityFilter(GraphOperator):
 
         keep = np.minimum(pval_out, pval_in) <= self.alpha
         A_f = sp.csr_matrix((w[keep], (rows[keep], cols[keep])), shape=A.shape)
-        return Graph.from_csr(A_f, directed=True, weighted=G.weighted,
-                              mode=G.mode,
-                              meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta))
+        return Graph.from_csr(
+            A_f, directed=True, weighted=G.weighted,
+            mode=G.mode,
+            metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata))
 
     def apply(self, G: Graph) -> Graph:
         self._check_mode_supported(G)

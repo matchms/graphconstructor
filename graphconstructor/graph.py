@@ -24,7 +24,7 @@ class Graph:
     - `directed`: True if directed, else undirected (stored symmetric)
     - `weighted`: True if edge weights are meaningful; if False, all edges are 1.0
     - `mode`: "distance" or "similarity" (for interpretation of weights)
-    - `meta`: pandas DataFrame with n rows (optional). May have a 'name' column.
+    - `metadata`: pandas DataFrame with n rows (optional). May have a 'name' column.
     - `ignore_selfloops`: If True, self-loops are ignored/removed (default for undirected graphs)
     - `keep_explicit_zeros`: If True, explicit zeros in adjacency are kept (default for distance graphs)
     """
@@ -32,7 +32,7 @@ class Graph:
     directed: bool
     weighted: bool
     mode: str
-    meta: pd.DataFrame | None = None
+    metadata: pd.DataFrame | None = None
     ignore_selfloops: Optional[bool] = None
     keep_explicit_zeros: Optional[bool] = None
 
@@ -107,7 +107,7 @@ class Graph:
             *,
             directed: bool = False,
             weighted: bool = True,
-            meta: pd.DataFrame | None = None,
+            metadata: pd.DataFrame | None = None,
             ignore_selfloops: bool = None,
             keep_explicit_zeros: bool = None,
             sym_op: SymOp = "max",
@@ -137,15 +137,15 @@ class Graph:
             A = _drop_diagonal(A)
 
         n = A.shape[0]
-        if meta is not None:
-            if len(meta) != n:
-                raise ValueError(f"meta has {len(meta)} rows but adjacency is {n}x{n}.")
-            meta = meta.reset_index(drop=True)
+        if metadata is not None:
+            if len(metadata) != n:
+                raise ValueError(f"metadata has {len(metadata)} rows but adjacency is {n}x{n}.")
+            metadata = metadata.reset_index(drop=True)
         return cls(
             adj=A.astype(float, copy=False),
             directed=directed, weighted=weighted,
             mode=mode, ignore_selfloops=ignore_selfloops,
-            meta=meta,
+            metadata=metadata,
             keep_explicit_zeros=keep_explicit_zeros,
             )
 
@@ -168,7 +168,7 @@ class Graph:
             *,
             directed: bool = False,
             weighted: bool = True,
-            meta: pd.DataFrame | None = None,
+            metadata: pd.DataFrame | None = None,
             ignore_selfloops: Optional[bool] = None,
             keep_explicit_zeros: Optional[bool] = None,
             sym_op: SymOp = "max",
@@ -208,7 +208,7 @@ class Graph:
             weighted=weighted_eff,
             mode=mode,
             ignore_selfloops=ignore_selfloops,
-            meta=meta, sym_op=sym_op,
+            metadata=metadata, sym_op=sym_op,
             keep_explicit_zeros=keep_explicit_zeros,
             )
 
@@ -298,9 +298,9 @@ class Graph:
                 attrs = G_nx.nodes[node]
                 row = {col: attrs.get(col, None) for col in all_cols}
                 rows.append(row)
-            meta = pd.DataFrame(rows)
+            metadata = pd.DataFrame(rows)
         else:
-            meta = None
+            metadata = None
 
         # Build Graph via from_csr to respect the usual symmetrization / defaults
         return cls.from_csr(
@@ -308,7 +308,7 @@ class Graph:
             mode=mode,
             directed=directed,
             weighted=weighted,
-            meta=meta,
+            metadata=metadata,
             ignore_selfloops=ignore_selfloops,
             keep_explicit_zeros=keep_explicit_zeros,
         )
@@ -333,8 +333,8 @@ class Graph:
 
     @property
     def node_names(self) -> list[str] | list[int]:
-        if self.meta is not None and "name" in self.meta.columns:
-            return self.meta["name"].tolist()
+        if self.metadata is not None and "name" in self.metadata.columns:
+            return self.metadata["name"].tolist()
         return list(range(self.n_nodes))
 
     # -------- Editing --------
@@ -346,8 +346,8 @@ class Graph:
             nodes = [nodes]
 
         to_drop_idx: set[int] = set()
-        if self.meta is not None and "name" in self.meta.columns:
-            name_to_idx = {name: i for i, name in enumerate(self.meta["name"].tolist())}
+        if self.metadata is not None and "name" in self.metadata.columns:
+            name_to_idx = {name: i for i, name in enumerate(self.metadata["name"].tolist())}
         else:
             name_to_idx = {}
 
@@ -368,8 +368,8 @@ class Graph:
         keep_mask[list(to_drop_idx)] = False
 
         A2 = self.adj[keep_mask][:, keep_mask].tocsr(copy=False)
-        meta2 = self.meta.loc[keep_mask].reset_index(drop=True) if self.meta is not None else None
-        return Graph(adj=A2, directed=self.directed, weighted=self.weighted, mode=self.mode, meta=meta2)
+        metadata2 = self.metadata.loc[keep_mask].reset_index(drop=True) if self.metadata is not None else None
+        return Graph(adj=A2, directed=self.directed, weighted=self.weighted, mode=self.mode, metadata=metadata2)
 
     # ----- Convert distance/similarity -----
     def convert_mode(
@@ -434,7 +434,7 @@ class Graph:
                 mode=target_mode,
                 directed=self.directed,
                 weighted=self.weighted,
-                meta=None if self.meta is None else self.meta.copy(),
+                metadata=None if self.metadata is None else self.metadata.copy(),
             )
 
     # -------- Exporters --------
@@ -447,10 +447,10 @@ class Graph:
 
         create_using = nx.DiGraph if self.directed else nx.Graph
         G = nx.from_scipy_sparse_array(self.adj, create_using=create_using)
-        # attach node attributes from meta
-        if self.meta is not None:
-            for col in self.meta.columns:
-                nx.set_node_attributes(G, {i: self.meta.iloc[i, self.meta.columns.get_loc(col)]
+        # attach node attributes from metadata
+        if self.metadata is not None:
+            for col in self.metadata.columns:
+                nx.set_node_attributes(G, {i: self.metadata.iloc[i, self.metadata.columns.get_loc(col)]
                                            for i in range(self.n_nodes)}, name=col)
         return G
 
@@ -477,9 +477,9 @@ class Graph:
             g.es["weight"] = [1.0] * len(rows)
 
         # node attributes
-        if self.meta is not None:
-            for col in self.meta.columns:
-                g.vs[col] = self.meta[col].tolist()
+        if self.metadata is not None:
+            for col in self.metadata.columns:
+                g.vs[col] = self.metadata[col].tolist()
         return g
 
     def to_graphml(self, path, *, include_graph_attrs: bool = True) -> None:
@@ -519,17 +519,17 @@ class Graph:
             directed=self.directed,
             weighted=self.weighted,
             mode=self.mode,
-            meta=None if self.meta is None else self.meta.copy(),
+            metadata=None if self.metadata is None else self.metadata.copy(),
         )
 
     def sorted_by(self, col: str) -> "Graph":
-        """Return a new graph with nodes permuted by ascending meta[col]."""
-        if self.meta is None or col not in self.meta.columns:
+        """Return a new graph with nodes permuted by ascending metadata[col]."""
+        if self.metadata is None or col not in self.metadata.columns:
             raise KeyError(f"Column '{col}' not found in metadata.")
-        order = np.argsort(self.meta[col].to_numpy())
+        order = np.argsort(self.metadata[col].to_numpy())
         A2 = self.adj[order][:, order]
-        meta2 = self.meta.iloc[order].reset_index(drop=True)
-        return Graph(adj=A2, directed=self.directed, weighted=self.weighted, mode=self.mode, meta=meta2)
+        metadata2 = self.metadata.iloc[order].reset_index(drop=True)
+        return Graph(adj=A2, directed=self.directed, weighted=self.weighted, mode=self.mode, metadata=metadata2)
 
     def degree(self, ignore_weights: bool = False) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
         """Return node degree(s).
