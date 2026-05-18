@@ -110,15 +110,15 @@ def test_lans_handles_zero_strength_rows():
     assert (G.adj.toarray() >= 0).all()
 
 
-# ----------------- Metadata preserved (if copy_meta=True) -----------------
+# ----------------- Metadata preserved (if copy_metadata=True) -----------------
 def test_lans_preserves_metadata():
     meta = pd.DataFrame({"name": ["a", "b", "c"], "grp": [1, 0, 1]})
     A = _csr([0.6, 0.4, 0.7], [0, 1, 2], [1, 2, 0], 3)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", metadata=meta, sym_op="max")
 
-    out = LocallyAdaptiveSparsification(alpha=0.25, rule="or", copy_meta=True).apply(G0)
+    out = LocallyAdaptiveSparsification(alpha=0.25, rule="or", copy_metadata=True).apply(G0)
     assert not out.directed and out.weighted
     # metadata should be copied, not referenced
-    if out.meta is not None:
+    if out.metadata is not None:
         meta.loc[0, "grp"] = 999
-        assert out.meta.loc[0, "grp"] == 1
+        assert out.metadata.loc[0, "grp"] == 1

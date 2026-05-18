@@ -134,14 +134,14 @@ def test_mlf_handles_no_edges_T_zero():
 def test_mlf_preserves_flags_and_copies_metadata_when_requested():
     meta = pd.DataFrame({"name": ["a", "b", "c"], "group": [1, 0, 1]})
     A = _csr([1, 2], [0, 1], [1, 2], 3)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta)
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", metadata=meta)
 
-    op = MarginalLikelihoodFilter(alpha=0.5, copy_meta=True)
+    op = MarginalLikelihoodFilter(alpha=0.5, copy_metadata=True)
     out = op.apply(G0)
 
     # Flags preserved
     assert not out.directed and out.weighted
     # Metadata copied (modifying original should not affect the result)
-    if out.meta is not None:
+    if out.metadata is not None:
         meta.loc[0, "group"] = 999
-        assert out.meta.loc[0, "group"] == 1
+        assert out.metadata.loc[0, "group"] == 1

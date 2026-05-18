@@ -97,5 +97,5 @@ def test_importers_preserve_directed_flag_and_allow_metadata():
         [0.0, 0.0, 0.0],
     ])
     meta = None  # can replace with a DataFrame; here we just test directed flag
-    G = from_dense(D, directed=True, weighted=True, mode="similarity", meta=meta)
+    G = from_dense(D, directed=True, weighted=True, mode="similarity", metadata=meta)
     assert G.directed and G.weighted
