@@ -13,8 +13,12 @@ Mode = Literal["distance", "similarity"]
 @dataclass(slots=True)
 class MetricDistanceFilter(GraphOperator):
     """
-    Metric Distance Backbone Filter for similarity graphs.
-    Code: https://github.com/CASCI-lab/distanceclosure/blob/master/distanceclosure/backbone.py
+    Metric Distance Backbone filter for undirected weighted similarity or distance graphs.
+
+    The method follows the distance backbone approach described in:
+    Simas, T., Correia, R.B., & Rocha, L.M. (2021).
+    "The distance backbone of complex networks."
+    Journal of Complex Networks, 9(6), cnab021.  https://doi.org/10.1093/comnet/cnab021
 
     Parameters
     ----------
@@ -55,8 +59,14 @@ class MetricDistanceFilter(GraphOperator):
     def _undirected_filter(self, D):
         disjunction = sum
 
-        D = D.to_networkx()
-        G = D.copy()
+        # The backbone algorithm is defined for distances.
+        if D.mode == "distance":
+            D_distance = D
+        else:
+            D_distance = D.convert_mode("distance")
+
+        D_nx = D_distance.to_networkx()
+        G = D_nx.copy()
         weight_function = _weight_function(G, self.weight)
 
         if self.verbose:
@@ -67,7 +77,7 @@ class MetricDistanceFilter(GraphOperator):
             if self.verbose:
                 i += 1
                 per = i / total
-                print("Backbone: Dijkstra: {i:d} of {total:d} ({per:.2%})".format(i=i, total=total, per=per))
+                print(f"Backbone: Dijkstra: {i} of {total} ({per:.2%})")
 
             metric_dist = single_source_dijkstra_path_length(
                 G, source=u, weight_function=weight_function, disjunction=disjunction
@@ -76,12 +86,25 @@ class MetricDistanceFilter(GraphOperator):
                 if metric_dist[v] < G[u][v][self.weight]:
                     G.remove_edge(u, v)
 
-        sparse_adj = nx.to_scipy_sparse_array(G)
+        sparse_adj = nx.to_scipy_sparse_array(G, weight=self.weight)
+
+        filtered_graph = Graph(
+            sparse_adj,
+            directed=False,
+            weighted=True,
+            mode="distance",
+            meta=None if D.meta is None else D.meta.copy(),
+        )
+
+        # Optional output conversion.
+        if self.mode == "similarity":
+            filtered_graph = filtered_graph.convert_mode("similarity")
+
         if self.distortion:
-            svals = self._compute_distortions(D, G, weight=self.weight, disjunction=disjunction)
-            return Graph(sparse_adj, False, True, self.mode), svals
+            svals = self._compute_distortions(D_nx, G, weight=self.weight, disjunction=disjunction)
+            return filtered_graph, svals
         else:
-            return Graph(sparse_adj, False, True, self.mode)
+            return filtered_graph
 
     def apply(self, G: Graph) -> Graph:
         self._check_mode_supported(G)
