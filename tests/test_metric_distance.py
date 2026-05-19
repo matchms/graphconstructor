@@ -108,3 +108,89 @@ def test_empty_graph():
 
     assert out.to_networkx().number_of_edges() == 0
     assert out.to_networkx().number_of_nodes() == 3
+
+
+def test_distance_mode_removes_semimetric_edge():
+    """In distance mode, an edge is removed if an indirect path is shorter."""
+    A = _csr(
+        data=[
+            1.0, 1.0,  # 0 -- 1
+            1.0, 1.0,  # 1 -- 2
+            3.0, 3.0,  # 0 -- 2, longer than 0 -- 1 -- 2
+        ],
+        rows=[0, 1, 1, 2, 0, 2],
+        cols=[1, 0, 2, 1, 2, 0],
+        n=3,
+    )
+
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="distance")
+    out = MetricDistanceFilter(mode="distance").apply(G0)
+    out_nx = out.to_networkx()
+
+    assert out_nx.has_edge(0, 1)
+    assert out_nx.has_edge(1, 2)
+    assert not out_nx.has_edge(0, 2)
+
+
+def test_similarity_mode_converts_similarity_before_filtering():
+    """
+    In similarity mode, strong similarities should behave like short distances.
+
+    The weak edge 0 -- 2 should be removed because 0 -- 1 -- 2 is the
+    stronger / closer indirect connection.
+    """
+    A = _csr(
+        data=[
+            0.9, 0.9,  # 0 -- 1, strong similarity
+            0.9, 0.9,  # 1 -- 2, strong similarity
+            0.1, 0.1,  # 0 -- 2, weak similarity
+        ],
+        rows=[0, 1, 1, 2, 0, 2],
+        cols=[1, 0, 2, 1, 2, 0],
+        n=3,
+    )
+
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity")
+    out = MetricDistanceFilter(mode="similarity").apply(G0)
+    out_nx = out.to_networkx()
+
+    assert out_nx.has_edge(0, 1)
+    assert out_nx.has_edge(1, 2)
+    assert not out_nx.has_edge(0, 2)
+
+
+def test_similarity_and_distance_inputs_give_equivalent_backbone_when_consistent():
+    """
+    A similarity graph and its corresponding distance graph should produce
+    the same backbone topology.
+    """
+    A_sim = _csr(
+        data=[
+            0.9, 0.9,
+            0.9, 0.9,
+            0.1, 0.1,
+        ],
+        rows=[0, 1, 1, 2, 0, 2],
+        cols=[1, 0, 2, 1, 2, 0],
+        n=3,
+    )
+
+    A_dist = _csr(
+        data=[
+            0.1, 0.1,
+            0.1, 0.1,
+            0.9, 0.9,
+        ],
+        rows=[0, 1, 1, 2, 0, 2],
+        cols=[1, 0, 2, 1, 2, 0],
+        n=3,
+    )
+
+    G_sim = Graph.from_csr(A_sim, directed=False, weighted=True, mode="similarity")
+    G_dist = Graph.from_csr(A_dist, directed=False, weighted=True, mode="distance")
+
+    out_sim = MetricDistanceFilter(mode="similarity").apply(G_sim).to_networkx()
+    out_dist = MetricDistanceFilter(mode="distance").apply(G_dist).to_networkx()
+
+    assert set(out_sim.edges()) == set(out_dist.edges())
+    assert set(out_dist.edges()) == {(0, 1), (1, 2)}
