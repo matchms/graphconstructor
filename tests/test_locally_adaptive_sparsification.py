@@ -53,15 +53,15 @@ def test_lans_undirected_and_subset_or_and_alpha_monotonicity():
     G_or = LocallyAdaptiveSparsification(alpha=0.30, rule="or").apply(G0)
     G_and = LocallyAdaptiveSparsification(alpha=0.30, rule="and").apply(G0)
 
-    e_or = set(zip(*sp.triu(G_or.adj, k=1).nonzero()))
-    e_and = set(zip(*sp.triu(G_and.adj, k=1).nonzero()))
+    e_or = set(zip(*sp.triu(G_or.adj, k=1).nonzero(), strict=True))
+    e_and = set(zip(*sp.triu(G_and.adj, k=1).nonzero(), strict=True))
     assert e_and.issubset(e_or)  # "and" ⊆ "or"
 
     # Monotonicity in alpha: larger alpha keeps (weakly) more edges
     G_lo = LocallyAdaptiveSparsification(alpha=0.10, rule="or").apply(G0)
     G_hi = LocallyAdaptiveSparsification(alpha=0.40, rule="or").apply(G0)
-    e_lo = set(zip(*sp.triu(G_lo.adj, k=1).nonzero()))
-    e_hi = set(zip(*sp.triu(G_hi.adj, k=1).nonzero()))
+    e_lo = set(zip(*sp.triu(G_lo.adj, k=1).nonzero(), strict=True))
+    e_hi = set(zip(*sp.triu(G_hi.adj, k=1).nonzero(), strict=True))
     assert e_lo.issubset(e_hi)
 
     # Symmetry guaranteed

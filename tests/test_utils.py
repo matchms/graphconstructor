@@ -17,7 +17,7 @@ from graphconstructor.utils import (
 # ---- helpers ----
 def _rowwise_pairset(indices_row, values_row):
     """Create a set of (idx, val) pairs ignoring order for a single row."""
-    return set(zip(indices_row.tolist(), values_row.tolist()))
+    return set(zip(indices_row.tolist(), values_row.tolist(), strict=True))
 
 
 # ---- _validate_square_matrix ----

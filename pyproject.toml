@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "graphconstructor"
-version = "0.3.0"
+version = "0.4.0"
 description = "Python library for graph construction from similarity or distance metrics"
 authors = ["Florian Huber <florian.huber@hs-duesseldorf.de>"]
 
@@ -56,28 +56,25 @@ line-ending = "lf"
 
 [tool.ruff.lint]
 # TODO: add some rules in future, eg. W291/292
-extend-select = ["D", "E", "I"]
-# TODO: some of these rules should be enforced in the future, eg. E713
+extend-select = ["D", "E", "I", "F", "Q", "UP", "B", "C4"]
+# TODO: some of these rules should be enforced in the future
 ignore = [
-    "D100",
-    "D101",
-    "D102",
-    "D103",
-    "D104",
-    "D105",
-    "D107",
-    "D200",
-    "D201",
-    "D202",
-    "D203",
-    "D204",
-    "D205",
-    "D209",
-    "D210",
-    "D212",
-    "D213",
-    "D4",
-    "E713"
+  "D100",
+  "D102",
+  "D104",
+  "D105",
+  "D107",
+  "D200",
+  "D201",
+  "D202",
+  "D203",
+  "D204",
+  "D205",
+  "D209",
+  "D210",
+  "D212",
+  "D213",
+  "D4",
 ]
 
 [tool.ruff.lint.isort]

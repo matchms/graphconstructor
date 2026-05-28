@@ -43,7 +43,7 @@ class MetricDistanceFilter(GraphOperator):
         G.remove_edges_from(B.edges())
         weight_function = _weight_function(B, weight)
 
-        svals = dict()
+        svals = {}
         for u in G.nodes():
             metric_dist = single_source_dijkstra_path_length(
                 B, source=u, weight_function=weight_function, disjunction=disjunction

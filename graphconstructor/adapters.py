@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 import numpy as np
 from numpy.typing import NDArray
 from .types import MatrixMode
@@ -8,6 +7,7 @@ from .utils import _to_numpy, _validate_square_matrix
 
 @dataclass
 class MatrixInput:
+    """Input for graph constructors that take a dense matrix."""
     matrix: NDArray
     mode: MatrixMode  # "distance" or "similarity"
 
@@ -19,6 +19,7 @@ class MatrixInput:
 
 @dataclass
 class KNNInput:
+    """Input for graph constructors that take KNN graphs."""
     indices: NDArray[np.int_]
     distances: NDArray
 
@@ -31,9 +32,7 @@ class KNNInput:
 
 @dataclass
 class ANNInput:
-    # A fitted ANN index, e.g., pynndescent.NNDescent
+    """A fitted ANN index, e.g., pynndescent.NNDescent"""
     index: object
     # Optionally, a query set to build edges from (defaults to the index's training set)
-    query_data: Optional[NDArray] = None
-
-    # We don't verify protocol strictly at runtime; we use duck typing in constructors.
+    query_data: NDArray | None = None

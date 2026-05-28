@@ -47,10 +47,10 @@ def test_disparity_directed_min_out_in_formula():
 
     alpha = 0.2
     expect_keep = np.minimum(pv_out, pv_in) <= alpha
-    expected = set(zip(rows[expect_keep].tolist(), cols[expect_keep].tolist()))
+    expected = set(zip(rows[expect_keep].tolist(), cols[expect_keep].tolist(), strict=True))
 
     out = DisparityFilter(alpha=alpha).apply(G0)
-    got = set(zip(*out.adj.nonzero()))
+    got = set(zip(*out.adj.nonzero(), strict=True))
     assert got == expected
     assert out.directed and out.weighted
     assert np.isfinite(out.adj.data).all()
@@ -74,8 +74,8 @@ def test_disparity_undirected_or_superset_and():
     assert (G_or.adj != G_or.adj.T).nnz == 0
     assert (G_and.adj != G_and.adj.T).nnz == 0
 
-    e_or = set(zip(*sp.triu(G_or.adj, k=1).nonzero()))
-    e_and = set(zip(*sp.triu(G_and.adj, k=1).nonzero()))
+    e_or = set(zip(*sp.triu(G_or.adj, k=1).nonzero(), strict=True))
+    e_and = set(zip(*sp.triu(G_and.adj, k=1).nonzero(), strict=True))
     assert e_and.issubset(e_or)
 
 

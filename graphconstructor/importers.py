@@ -16,6 +16,7 @@ def from_dense(
         metadata=None,
         sym_op="max"
         ) -> Graph:
+    """Construct a Graph from a dense adjacency matrix."""
     return Graph.from_dense(arr, directed=directed, weighted=weighted, mode=mode, metadata=metadata, sym_op=sym_op)
 
 
@@ -28,6 +29,7 @@ def from_csr(
         metadata=None,
         sym_op="max"
         ) -> Graph:
+    """Construct a Graph from a sparse adjacency matrix."""
     return Graph.from_csr(adj, directed=directed, weighted=weighted, mode=mode, metadata=metadata, sym_op=sym_op)
 
 
@@ -40,6 +42,7 @@ def from_knn(
         metadata=None,
         sym_op="max"
         ) -> Graph:
+    """Construct a Graph from KNN neighbor indices and distances."""
     ind, dist = _coerce_knn_inputs(indices, distances)
     n_query, k = ind.shape
 
@@ -71,10 +74,11 @@ def from_ann(
         metadata=None,
         sym_op="max"
         ) -> Graph:
+    """Construct a Graph from a fitted ANN index, e.g., pynndescent.NNDescent."""
     idx = ann.index if hasattr(ann, "index") else ann
-    if hasattr(idx, "indices_") and getattr(idx, "indices_") is not None:
-        ind = np.asarray(getattr(idx, "indices_"))[:, :k]
-        dist = np.asarray(getattr(idx, "distances_"))[:, :k]
+    if hasattr(idx, "indices_") and idx.indices_ is not None:
+        ind = np.asarray(idx.indices_)[:, :k]
+        dist = np.asarray(idx.distances_)[:, :k]
     else:
         if query_data is None:
             raise TypeError("from_ann requires query_data when index has no cached neighbors.")
