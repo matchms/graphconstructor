@@ -1,4 +1,4 @@
-from typing import Iterable, Optional, Tuple
+from collections.abc import Iterable
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -8,13 +8,13 @@ def plot_degree_distribution(
     *,
     x_scale: str = "log",
     y_scale: str = "log",
-    ax: Optional[plt.Axes] = None,
+    ax: plt.Axes | None = None,
     normalize: bool = True,
     include_zero_degree: bool = False,
-    label: Optional[str] = None,
+    label: str | None = None,
     marker: str = "o",
     markersize: float = 5.0,
-) -> Tuple[plt.Figure, plt.Axes]:
+) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot the degree distribution p(k) vs k for a single graph.
 
@@ -128,11 +128,11 @@ def plot_degree_distributions_grid(
     y_scale: str = "log",
     normalize: bool = True,
     include_zero_degree: bool = False,
-    figsize: Optional[Tuple[float, float]] = None,
+    figsize: tuple[float, float] | None = None,
     tight_layout: bool = True,
     sharex: bool = False,
     sharey: bool = False,
-) -> Tuple[plt.Figure, np.ndarray]:
+) -> tuple[plt.Figure, np.ndarray]:
     """
     Plot a grid of degree distribution plots for multiple graphs.
 

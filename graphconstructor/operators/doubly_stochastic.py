@@ -85,7 +85,7 @@ class DoublyStochasticNormalize(GraphOperator):
                 warnings.warn(
                     "DoublyStochasticNormalize stopped early because scaling factors "
                     "became very large. Result may not be doubly stochastic.",
-                    RuntimeWarning,
+                    RuntimeWarning, stacklevel=2,
                 )
                 break
 
@@ -117,7 +117,7 @@ class DoublyStochasticNormalize(GraphOperator):
         if not converged:
             warnings.warn(
                 "DoublyStochasticNormalize did not converge within max_iter.",
-                RuntimeWarning,
+                RuntimeWarning, stacklevel=2,
             )
 
         # Apply scaling once: A' = diag(r) * A * diag(c)  (CSR-friendly)

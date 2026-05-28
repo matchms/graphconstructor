@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 import numpy as np
 import scipy.sparse as sp
 from ..graph import Graph
@@ -30,7 +30,7 @@ class KNNSelector(GraphOperator):
     """
     k: int
     mutual: bool = False
-    mutual_k: Optional[int] = None
+    mutual_k: int | None = None
     mode: Mode = "distance"
     supported_modes = ["similarity", "distance"]
 

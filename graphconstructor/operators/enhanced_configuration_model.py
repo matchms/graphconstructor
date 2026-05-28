@@ -362,7 +362,7 @@ class EnhancedConfigurationModelFilter(GraphOperator):
             import warnings
             warnings.warn(
                 f"ECM optimisation did not converge: {res.message}",
-                RuntimeWarning,
+                RuntimeWarning, stacklevel=2,
             )
 
         # ---- p-value matrix ----------------------------------------------
@@ -381,11 +381,11 @@ class EnhancedConfigurationModelFilter(GraphOperator):
         W_lower_original = sp.tril(W_original, k=-1).tocoo()
         original_lookup = {
             (int(i), int(j)): w
-            for i, j, w in zip(W_lower_original.row, W_lower_original.col, W_lower_original.data)
+            for i, j, w in zip(W_lower_original.row, W_lower_original.col, W_lower_original.data, strict=True)
         }
 
         original_weights = np.array(
-            [original_lookup[(int(i), int(j))] for i, j in zip(row, col)],
+            [original_lookup[(int(i), int(j))] for i, j in zip(row, col, strict=True)],
             dtype=W_original.dtype,
         )
 

@@ -1,6 +1,7 @@
 import json
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Iterable, Literal, Optional, Sequence
+from typing import Literal
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -35,8 +36,8 @@ class Graph:
     weighted: bool
     mode: str
     metadata: pd.DataFrame | None = None
-    ignore_selfloops: Optional[bool] = None
-    keep_explicit_zeros: Optional[bool] = None
+    ignore_selfloops: bool | None = None
+    keep_explicit_zeros: bool | None = None
 
     def __post_init__(self):
         # Check mode
@@ -171,8 +172,8 @@ class Graph:
             directed: bool = False,
             weighted: bool = True,
             metadata: pd.DataFrame | None = None,
-            ignore_selfloops: Optional[bool] = None,
-            keep_explicit_zeros: Optional[bool] = None,
+            ignore_selfloops: bool | None = None,
+            keep_explicit_zeros: bool | None = None,
             sym_op: SymOp = "max",
         ) -> "Graph":
         """Build from an edge list. For undirected=True, we symmetrize later."""
@@ -188,7 +189,7 @@ class Graph:
             rows = edges[:, 0].astype(int, copy=False)
             cols = edges[:, 1].astype(int, copy=False)
         else:
-            rows, cols = map(np.asarray, zip(*edges)) if edges else (np.array([], int), np.array([], int))
+            rows, cols = map(np.asarray, zip(*edges, strict=True)) if edges else (np.array([], int), np.array([], int))
 
         if weights is None:
             data = np.ones_like(rows, dtype=float)
@@ -468,7 +469,7 @@ class Graph:
         weights = coo.data[mask] if self.weighted else np.ones(mask.sum(), dtype=float)
 
         g = ig.Graph(n=self.n_nodes, directed=self.directed)
-        g.add_edges(list(zip(rows.tolist(), cols.tolist())))
+        g.add_edges(list(zip(rows.tolist(), cols.tolist(), strict=True)))
         if self.weighted:
             g.es["weight"] = weights.tolist()
         else:
@@ -581,7 +582,7 @@ class Graph:
         values = coo.data[edge_mask]
 
         edges = []
-        for edge_idx, (src, dst, value) in enumerate(zip(rows, cols, values)):
+        for edge_idx, (src, dst, value) in enumerate(zip(rows, cols, values, strict=True)):
             data = {
                 "id": f"e{edge_idx}",
                 "source": node_ids[int(src)],

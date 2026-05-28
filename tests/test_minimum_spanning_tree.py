@@ -184,7 +184,7 @@ def test_mst_similarity_preserves_original_weights_on_tree_edges():
     A_tree = T.adj.toarray()
 
     rows, cols = np.where(A_tree > 0)
-    for r, c in zip(rows, cols):
+    for r, c in zip(rows, cols, strict=True):
         assert A_tree[r, c] == pytest.approx(A_orig[r, c])
 
 

@@ -32,8 +32,8 @@ def test_nc_undirected_symmetry_and_monotonicity():
     assert (G_lo.adj != G_lo.adj.T).nnz == 0
     assert (G_hi.adj != G_hi.adj.T).nnz == 0
 
-    e_lo = set(zip(*sp.triu(G_lo.adj, k=1).nonzero()))
-    e_hi = set(zip(*sp.triu(G_hi.adj, k=1).nonzero()))
+    e_lo = set(zip(*sp.triu(G_lo.adj, k=1).nonzero(), strict=True))
+    e_hi = set(zip(*sp.triu(G_hi.adj, k=1).nonzero(), strict=True))
     assert e_hi.issubset(e_lo)
 
 
@@ -50,8 +50,8 @@ def test_nc_directed_monotonicity_and_no_negatives():
     G1 = NoiseCorrected(delta=1.0).apply(G0)
     G2 = NoiseCorrected(delta=2.0).apply(G0)
 
-    e1 = set(zip(*G1.adj.nonzero()))
-    e2 = set(zip(*G2.adj.nonzero()))
+    e1 = set(zip(*G1.adj.nonzero(), strict=True))
+    e2 = set(zip(*G2.adj.nonzero(), strict=True))
     assert e2.issubset(e1)
 
     # No NaNs/Inf

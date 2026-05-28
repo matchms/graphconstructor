@@ -46,14 +46,14 @@ def test_mlf_undirected_matches_binomial_tail():
 
     alpha = 0.05
     keep = pvals <= alpha
-    expected_edges = set(zip(Au.row[keep].tolist(), Au.col[keep].tolist()))
+    expected_edges = set(zip(Au.row[keep].tolist(), Au.col[keep].tolist(), strict=True))
 
     # Run operator
     out = MarginalLikelihoodFilter(alpha=alpha).apply(G0)
     A2 = out.adj
     # Extract kept undirected edges from result (upper triangle)
     kept_u = sp.triu(A2, k=1).tocoo()
-    got_edges = set(zip(kept_u.row.tolist(), kept_u.col.tolist()))
+    got_edges = set(zip(kept_u.row.tolist(), kept_u.col.tolist(), strict=True))
 
     assert got_edges == expected_edges
     # Symmetry and flags preserved
@@ -90,11 +90,11 @@ def test_mlf_directed_uses_out_in_degrees():
 
     alpha = 0.10
     keep = pvals <= alpha
-    expected_arcs = set(zip(coo.row[keep].tolist(), coo.col[keep].tolist()))
+    expected_arcs = set(zip(coo.row[keep].tolist(), coo.col[keep].tolist(), strict=True))
 
     out = MarginalLikelihoodFilter(alpha=alpha).apply(G0)
     coo2 = out.adj.tocoo()
-    got_arcs = set(zip(coo2.row.tolist(), coo2.col.tolist()))
+    got_arcs = set(zip(coo2.row.tolist(), coo2.col.tolist(), strict=True))
 
     assert got_arcs == expected_arcs
     assert out.directed and out.weighted
@@ -116,8 +116,8 @@ def test_mlf_alpha_monotonicity():
     G_small = MarginalLikelihoodFilter(alpha=0.01).apply(G0)
     G_large = MarginalLikelihoodFilter(alpha=0.2).apply(G0)
 
-    e_small = set(zip(*sp.triu(G_small.adj, k=1).nonzero()))
-    e_large = set(zip(*sp.triu(G_large.adj, k=1).nonzero()))
+    e_small = set(zip(*sp.triu(G_small.adj, k=1).nonzero(), strict=True))
+    e_large = set(zip(*sp.triu(G_large.adj, k=1).nonzero(), strict=True))
     assert e_small.issubset(e_large)
 
 

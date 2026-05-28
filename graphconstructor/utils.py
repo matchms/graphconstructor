@@ -1,4 +1,5 @@
-from typing import Callable, Literal, Tuple, Union
+from collections.abc import Callable
+from typing import Literal
 import numpy as np
 import scipy.sparse as sp
 from numpy.typing import NDArray
@@ -8,10 +9,7 @@ from .types import MatrixMode
 
 # Type aliases for clarity
 Mode = Literal["distance", "similarity"]
-ConversionMethod = Union[
-    Literal["reciprocal", "negative", "exp", "gaussian"],
-    Callable[[np.ndarray], np.ndarray]
-    ]
+ConversionMethod = Literal["reciprocal", "negative", "exp", "gaussian"] | Callable[[np.ndarray], np.ndarray]
 
 
 def _validate_square_matrix(M: np.ndarray) -> None:
@@ -40,7 +38,7 @@ def _drop_diagonal(A: sp.csr_matrix) -> sp.csr_matrix:
     return sp.csr_matrix((coo.data[mask], (coo.row[mask], coo.col[mask])), shape=A.shape)
 
 
-def _coerce_knn_inputs(indices, distances) -> Tuple[np.ndarray, np.ndarray]:
+def _coerce_knn_inputs(indices, distances) -> tuple[np.ndarray, np.ndarray]:
     ind = _to_numpy(indices)
     dist = _to_numpy(distances)
     if ind.shape != dist.shape:
@@ -60,7 +58,7 @@ def _csr_from_edges(n: int, rows: np.ndarray, cols: np.ndarray, weights: np.ndar
     return csr_matrix((weights, (rows, cols)), shape=(n, n))
 
 
-def _as_csr_square(M: NDArray | spmatrix) -> Tuple[sp.csr_matrix, int]:
+def _as_csr_square(M: NDArray | spmatrix) -> tuple[sp.csr_matrix, int]:
     """Return (CSR, n) for a square matrix without densifying.
 
     If `M` is dense, convert to CSR. If `M` is sparse, convert format to CSR
@@ -78,7 +76,7 @@ def _as_csr_square(M: NDArray | spmatrix) -> Tuple[sp.csr_matrix, int]:
     return sp.csr_matrix(arr), arr.shape[0]
 
 
-def _topk_per_row_sparse(csr: sp.csr_matrix, k: int, *, largest: bool) -> Tuple[np.ndarray, np.ndarray]:
+def _topk_per_row_sparse(csr: sp.csr_matrix, k: int, *, largest: bool) -> tuple[np.ndarray, np.ndarray]:
     """Return (indices, values) of top-k entries per row from CSR matrix.
 
     This operates strictly on the row's nonzeros without densifying.
@@ -120,7 +118,7 @@ def _topk_per_row_sparse(csr: sp.csr_matrix, k: int, *, largest: bool) -> Tuple[
     return ind, vals
 
 
-def _knn_from_matrix(M: NDArray | spmatrix, k: int, *, mode: MatrixMode) -> Tuple[np.ndarray, np.ndarray]:
+def _knn_from_matrix(M: NDArray | spmatrix, k: int, *, mode: MatrixMode) -> tuple[np.ndarray, np.ndarray]:
     """Compute kNN (indices, values) from a square distance/similarity matrix.
 
     Supports dense and sparse inputs without densifying sparse matrices.
