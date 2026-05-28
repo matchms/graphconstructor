@@ -536,9 +536,9 @@ class Graph:
         """
 
         if node_id_col is not None:
-            if self.meta is None or node_id_col not in self.meta.columns:
+            if self.metadata is None or node_id_col not in self.metadata.columns:
                 raise KeyError(f"Column '{node_id_col}' not found in metadata.")
-            node_ids = self.meta[node_id_col].astype(str).tolist()
+            node_ids = self.metadata[node_id_col].astype(str).tolist()
         else:
             node_ids = [str(i) for i in range(self.n_nodes)]
 
@@ -554,14 +554,14 @@ class Graph:
 
             if (
                 node_label_col is not None
-                and self.meta is not None
-                and node_label_col in self.meta.columns
+                and self.metadata is not None
+                and node_label_col in self.metadata.columns
             ):
-                data["label"] = self.meta.iloc[i][node_label_col]
+                data["label"] = self.metadata.iloc[i][node_label_col]
 
-            if self.meta is not None:
-                for col in self.meta.columns:
-                    value = self.meta.iloc[i][col]
+            if self.metadata is not None:
+                for col in self.metadata.columns:
+                    value = self.metadata.iloc[i][col]
                     if pd.isna(value):
                         value = None
                     data[col] = value

@@ -506,7 +506,7 @@ def test_to_cytoscape_returns_expected_nodes_edges_and_metadata():
         directed=False,
         weighted=True,
         mode="similarity",
-        meta=meta,
+        metadata=meta,
     )
 
     cy = G.to_cytoscape()
@@ -548,7 +548,7 @@ def test_to_cytoscape_writes_json_and_uses_custom_node_ids(tmp_path):
         directed=True,
         weighted=True,
         mode="distance",
-        meta=meta,
+        metadata=meta,
     )
 
     path = tmp_path / "graph.cyjs"
@@ -577,7 +577,7 @@ def test_to_cytoscape_writes_json_and_uses_custom_node_ids(tmp_path):
 def test_to_cytoscape_rejects_duplicate_custom_node_ids():
     A = _csr([1.0], [0], [1], 2)
     meta = pd.DataFrame({"id": ["same", "same"]})
-    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", meta=meta)
+    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", metadata=meta)
 
     with pytest.raises(ValueError, match="node IDs must be unique"):
         G.to_cytoscape(node_id_col="id")
