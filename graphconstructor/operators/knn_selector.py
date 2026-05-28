@@ -75,5 +75,5 @@ class KNNSelector(GraphOperator):
             directed=G.directed,
             weighted=G.weighted,
             mode=self.mode,
-            meta=G.meta.copy() if G.meta is not None else None,
+            metadata=G.metadata.copy() if G.metadata is not None else None,
         )

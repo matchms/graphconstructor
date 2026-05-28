@@ -87,10 +87,10 @@ def test_nc_all_zero_noop():
 def test_nc_preserves_flags_and_copies_metadata():
     meta = pd.DataFrame({"name": ["a", "b", "c"], "grp": [1, 0, 1]})
     A = _csr([0.5, 0.3, 0.7], [0, 1, 2], [1, 2, 0], 3)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", metadata=meta, sym_op="max")
 
-    out = NoiseCorrected(delta=1.64, copy_meta=True).apply(G0)
+    out = NoiseCorrected(delta=1.64, copy_metadata=True).apply(G0)
     assert not out.directed and out.weighted
-    if out.meta is not None:
+    if out.metadata is not None:
         meta.loc[0, "grp"] = 999
-        assert out.meta.loc[0, "grp"] == 1
+        assert out.metadata.loc[0, "grp"] == 1

@@ -27,7 +27,7 @@ class MinimumSpanningTree(GraphOperator):
       but with exactly n_nodes - 1 edges (if n_nodes > 0).
     """
 
-    copy_meta: bool = True
+    copy_metadata: bool = True
     # Distance: classical MST; Similarity: maximum spanning tree
     supported_modes = ["distance", "similarity"]
 
@@ -91,7 +91,7 @@ class MinimumSpanningTree(GraphOperator):
             directed=False,
             weighted=G.weighted,
             mode=G.mode,
-            meta=G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta,
+            metadata=G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata,
             sym_op="max",
             ignore_selfloops=G.ignore_selfloops,
             keep_explicit_zeros=G.keep_explicit_zeros,

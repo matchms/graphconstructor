@@ -132,12 +132,12 @@ def test_from_csr_unweighted_forces_unit_weights():
 def test_from_csr_metadata_alignment_and_names():
     A = _csr([1.0], [0], [1], 2)
     meta = pd.DataFrame({"name": ["a", "b"], "cls": [0, 1]})
-    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", meta=meta)
+    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", metadata=meta)
     assert G.node_names == ["a", "b"]
-    assert list(G.meta.columns) == ["name", "cls"]
+    assert list(G.metadata.columns) == ["name", "cls"]
 
-    with pytest.raises(ValueError, match="meta has .* rows"):
-        Graph.from_csr(A, directed=False, weighted=True, mode="distance", meta=meta.iloc[:1])
+    with pytest.raises(ValueError, match="metadata has .* rows"):
+        Graph.from_csr(A, directed=False, weighted=True, mode="distance", metadata=meta.iloc[:1])
 
 
 def test_from_edges_missing_weights():
@@ -197,7 +197,7 @@ def test_has_self_loops_property_false_by_default():
 def test_drop_by_index_and_name_updates_adj_and_meta():
     A = _csr([1, 1, 1], [0, 0, 1], [1, 2, 2], 3)
     meta = pd.DataFrame({"name": ["a", "b", "c"], "cls": [0, 1, 1]})
-    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", meta=meta)
+    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", metadata=meta)
 
     G2 = G.drop(["b"])  # drop name "b" (index 1)
     assert G2.n_nodes == 2
@@ -231,7 +231,7 @@ def test_drop_single_value():
     """Test dropping a single int/str (not in list)."""
     A = _csr([1], [0], [1], 3)
     meta = pd.DataFrame({"name": ["a", "b", "c"]})
-    G = Graph.from_csr(A, directed=False, mode="distance", meta=meta)
+    G = Graph.from_csr(A, directed=False, mode="distance", metadata=meta)
     
     G2 = G.drop(1)  # single int
     assert G2.n_nodes == 2
@@ -243,7 +243,7 @@ def test_drop_single_value():
 def test_sorted_by_permuted_order():
     A = _csr([1, 1], [0, 1], [1, 2], 3)
     meta = pd.DataFrame({"name": ["c", "a", "b"], "score": [3, 1, 2]})
-    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", meta=meta)
+    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", metadata=meta)
     G2 = G.sorted_by("score")
     # names should be ordered by score ascending: a, b, c
     assert G2.node_names == ["a", "b", "c"]
@@ -255,14 +255,14 @@ def test_copy_creates_independent_graph():
     """Modifications to copy shouldn't affect original."""
     A = _csr([1], [0], [1], 2)
     meta = pd.DataFrame({"name": ["a", "b"]})
-    G = Graph.from_csr(A, mode="distance", meta=meta)
+    G = Graph.from_csr(A, mode="distance", metadata=meta)
     
     G2 = G.copy()
     G2.adj.data[0] = 999.0
     assert G.adj.data[0] != 999.0  # original unchanged
     
-    G2.meta.iloc[0, 0] = "changed"
-    assert G.meta.iloc[0, 0] == "a"  # original unchanged
+    G2.metadata.iloc[0, 0] = "changed"
+    assert G.metadata.iloc[0, 0] == "a"  # original unchanged
 
 
 # ----------------- utilities -----------------
@@ -353,7 +353,7 @@ def test_graph_degree_method_selfloops_counted_twice_weighted():
 def test_to_networkx_types_and_node_attributes():
     A = _csr([0.5, 0.7], [0, 1], [1, 2], 3)
     meta = pd.DataFrame({"name": ["n0", "n1", "n2"], "cls": [0, 1, 1]})
-    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", meta=meta)
+    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", metadata=meta)
 
     nxG = G.to_networkx()
     import networkx as nx
@@ -373,7 +373,7 @@ def test_graphml_roundtrip_undirected_with_meta(tmp_path, S_dense, meta_df):
         directed=False,
         weighted=True,
         mode="similarity",
-        meta=meta_df,
+        metadata=meta_df,
     )
     path = tmp_path / "graph_undirected.graphml"
 
@@ -392,11 +392,11 @@ def test_graphml_roundtrip_undirected_with_meta(tmp_path, S_dense, meta_df):
     np.testing.assert_array_almost_equal(G2.adj.toarray(), G.adj.toarray())
 
     # Metadata should be preserved (content-wise)
-    assert G2.meta is not None
+    assert G2.metadata is not None
 
     # Compare metadata ignoring column order and dtype
-    meta1 = G2.meta.reindex(sorted(G2.meta.columns), axis=1).reset_index(drop=True)
-    meta2 = G.meta.reindex(sorted(G.meta.columns), axis=1).reset_index(drop=True)
+    meta1 = G2.metadata.reindex(sorted(G2.metadata.columns), axis=1).reset_index(drop=True)
+    meta2 = G.metadata.reindex(sorted(G.metadata.columns), axis=1).reset_index(drop=True)
     pd.testing.assert_frame_equal(meta1, meta2, check_dtype=False)
 
 
@@ -460,10 +460,10 @@ def test_from_graphml_builds_metadata_from_node_attributes(tmp_path):
     G = Graph.from_graphml(path, default_mode="similarity")
 
     assert G.n_nodes == 2
-    assert G.meta is not None
-    assert list(G.meta.columns) == ["group", "name"] or sorted(G.meta.columns) == ["group", "name"]
+    assert G.metadata is not None
+    assert list(G.metadata.columns) == ["group", "name"] or sorted(G.metadata.columns) == ["group", "name"]
     # Check content, ignoring column order and dtype
-    meta_sorted = G.meta.reindex(sorted(G.meta.columns), axis=1)
+    meta_sorted = G.metadata.reindex(sorted(G.metadata.columns), axis=1)
     expected = pd.DataFrame({"name": ["a", "b"], "group": [1, 2]})
     expected_sorted = expected.reindex(sorted(expected.columns), axis=1)
     pd.testing.assert_frame_equal(
@@ -482,7 +482,7 @@ def test_from_graphml_builds_metadata_from_node_attributes(tmp_path):
 def test_to_igraph_types_and_attributes():
     A = _csr([0.2, 0.9, 0.3], [0, 1, 2], [1, 2, 0], 3)
     meta = pd.DataFrame({"name": ["a", "b", "c"], "label": [10, 20, 30]})
-    G = Graph.from_csr(A, directed=True, weighted=True, mode="distance", meta=meta)
+    G = Graph.from_csr(A, directed=True, weighted=True, mode="distance", metadata=meta)
 
     igG = G.to_igraph()
     import igraph as ig
@@ -506,7 +506,7 @@ def test_to_cytoscape_returns_expected_nodes_edges_and_metadata():
         directed=False,
         weighted=True,
         mode="similarity",
-        meta=meta,
+        metadata=meta,
     )
 
     cy = G.to_cytoscape()
@@ -548,7 +548,7 @@ def test_to_cytoscape_writes_json_and_uses_custom_node_ids(tmp_path):
         directed=True,
         weighted=True,
         mode="distance",
-        meta=meta,
+        metadata=meta,
     )
 
     path = tmp_path / "graph.cyjs"
@@ -577,7 +577,7 @@ def test_to_cytoscape_writes_json_and_uses_custom_node_ids(tmp_path):
 def test_to_cytoscape_rejects_duplicate_custom_node_ids():
     A = _csr([1.0], [0], [1], 2)
     meta = pd.DataFrame({"id": ["same", "same"]})
-    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", meta=meta)
+    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", metadata=meta)
 
     with pytest.raises(ValueError, match="node IDs must be unique"):
         G.to_cytoscape(node_id_col="id")
@@ -586,7 +586,7 @@ def test_to_cytoscape_rejects_duplicate_custom_node_ids():
 # ----------------- Distance/similarity conversion -----------------
 def test_convert_mode_distance_to_similarity_and_back_dense(S_dense, meta_df):
     G = Graph.from_dense(
-        S_dense, directed=False, weighted=True, mode="similarity", meta=meta_df
+        S_dense, directed=False, weighted=True, mode="similarity", metadata=meta_df
         )
     G_dist = G.convert_mode("distance")
     assert G_dist.mode == "distance"
@@ -594,12 +594,12 @@ def test_convert_mode_distance_to_similarity_and_back_dense(S_dense, meta_df):
     assert G_sim.mode == "similarity"
     assert np.allclose(G_sim.adj.toarray(), G.adj.toarray())
     # Metadata preserved
-    assert G_sim.meta.equals(G.meta)
+    assert G_sim.metadata.equals(G.metadata)
 
 
 def test_convert_mode_distance_to_similarity_and_back_csr(S_csr, meta_df):
     G = Graph.from_csr(
-        S_csr, directed=False, weighted=True, mode="similarity", meta=meta_df
+        S_csr, directed=False, weighted=True, mode="similarity", metadata=meta_df
         )
     G_dist = G.convert_mode("distance")
     assert G_dist.mode == "distance"
@@ -607,11 +607,11 @@ def test_convert_mode_distance_to_similarity_and_back_csr(S_csr, meta_df):
     assert G_sim.mode == "similarity"
     assert np.allclose(G_sim.adj.toarray(), G.adj.toarray())
     # Metadata preserved
-    assert G_sim.meta.equals(G.meta)
+    assert G_sim.metadata.equals(G.metadata)
 
     # Conversion to dense should lead to different values (in place of 0s)
     G_dense = Graph.from_dense(
-        S_csr.toarray(), directed=False, weighted=True, mode="similarity", meta=meta_df
+        S_csr.toarray(), directed=False, weighted=True, mode="similarity", metadata=meta_df
         )
     G_dist_dense = G_dense.convert_mode("distance")
     assert G_dense.adj.data.shape == G.adj.data.shape  # no change in dense conversion

@@ -255,7 +255,7 @@ def test_mst_raises_on_directed_graph():
 # ---------------------------------------------------------------------------
 def test_mst_preserves_metadata_copy_meta_true():
     """
-    When copy_meta=True (default), MST result should have a deep copy of meta.
+    When copy_metadata=True (default), MST result should have a deep copy of meta.
     """
     adj = np.array(
         [
@@ -265,24 +265,24 @@ def test_mst_preserves_metadata_copy_meta_true():
         dtype=float,
     )
     meta = pd.DataFrame({"name": ["a", "b"], "group": [1, 2]})
-    G = Graph.from_dense(adj, mode="distance", directed=False, weighted=True, meta=meta)
-    op = MinimumSpanningTree(copy_meta=True)
+    G = Graph.from_dense(adj, mode="distance", directed=False, weighted=True, metadata=meta)
+    op = MinimumSpanningTree(copy_metadata=True)
 
     T = op.apply(G)
 
-    assert T.meta is not None
-    assert G.meta is not None
+    assert T.metadata is not None
+    assert G.metadata is not None
 
     # Different objects, but equal content
-    assert T.meta is not G.meta
-    pd.testing.assert_frame_equal(T.meta, G.meta)
+    assert T.metadata is not G.metadata
+    pd.testing.assert_frame_equal(T.metadata, G.metadata)
 
 
 '''
 # TODO: check why this fails!!
 def test_mst_reuses_metadata_copy_meta_false():
     """
-    When copy_meta=False, MST result should reuse the same metadata object.
+    When copy_metadata=False, MST result should reuse the same metadata object.
     """
     adj = np.array(
         [
@@ -292,13 +292,13 @@ def test_mst_reuses_metadata_copy_meta_false():
         dtype=float,
     )
     meta = pd.DataFrame({"name": ["a", "b"], "group": [1, 2]})
-    G = Graph.from_dense(adj, mode="distance", directed=False, weighted=True, meta=meta)
-    op = MinimumSpanningTree(copy_meta=False)
+    G = Graph.from_dense(adj, mode="distance", directed=False, weighted=True, metadata=meta)
+    op = MinimumSpanningTree(copy_metadata=False)
 
     T = op.apply(G)
 
     # Same object
-    assert T.meta is G.meta
+    assert T.metadata is G.meta
 '''
     
 

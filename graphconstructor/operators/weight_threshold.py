@@ -32,6 +32,7 @@ class WeightThreshold(GraphOperator):
         rows, cols = coo.row[keep], coo.col[keep]
         w = coo.data[keep] if G.weighted else np.ones(keep.sum(), dtype=float)
         A = sp.csr_matrix((w, (rows, cols)), shape=csr.shape)
-        return Graph.from_csr(A, directed=G.directed, weighted=G.weighted,
-                              mode=self.mode,
-                              meta=None if G.meta is None else G.meta.copy(), sym_op="max")
+        return Graph.from_csr(
+            A, directed=G.directed, weighted=G.weighted,
+            mode=self.mode,
+            metadata=None if G.metadata is None else G.metadata.copy(), sym_op="max")

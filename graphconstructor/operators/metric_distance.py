@@ -93,7 +93,7 @@ class MetricDistanceFilter(GraphOperator):
             directed=False,
             weighted=True,
             mode="distance",
-            meta=None if D.meta is None else D.meta.copy(),
+            metadata=None if D.metadata is None else D.metadata.copy(),
         )
 
         # Optional output conversion.

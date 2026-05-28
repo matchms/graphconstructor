@@ -39,13 +39,13 @@ class LocallyAdaptiveSparsification(GraphOperator):
         Significance level in (0,1].
     rule : {"or","and"}
         Combination rule for UNDIRECTED graphs. Ignored for directed graphs.
-    copy_meta : bool
+    copy_metadata : bool
         If True, copy metadata frame onto the result graph.
 
     """
     alpha: float = 0.05
     rule: UndirectedRule = "or"
-    copy_meta: bool = True
+    copy_metadata: bool = True
     supported_modes = ["similarity"]
 
     # ---- helpers ----
@@ -109,7 +109,7 @@ class LocallyAdaptiveSparsification(GraphOperator):
         if A.nnz == 0:
             return Graph.from_csr(
                 A.copy(), directed=True, weighted=G.weighted,
-                meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta)
+                metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata)
             )
 
         # Out-side mask on A
@@ -129,7 +129,7 @@ class LocallyAdaptiveSparsification(GraphOperator):
         return Graph.from_csr(
             A_kept, directed=True, weighted=G.weighted,
             mode=G.mode,
-            meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta)
+            metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata)
         )
 
     def _apply_undirected(self, G: Graph) -> Graph:
@@ -140,7 +140,7 @@ class LocallyAdaptiveSparsification(GraphOperator):
             return Graph.from_csr(
                 A.copy(), directed=False, weighted=G.weighted,
                 mode=G.mode,
-                meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+                metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
                 sym_op="max",
             )
 
@@ -163,7 +163,7 @@ class LocallyAdaptiveSparsification(GraphOperator):
         return Graph.from_csr(
             A_kept, directed=False, weighted=G.weighted,
             mode=G.mode,
-            meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+            metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
             sym_op="max",
         )
 

@@ -29,13 +29,13 @@ class DoublyStochasticNormalize(GraphOperator):
         sum is in [1 - tolerance, 1 + tolerance]. Default 1e-5.
     max_iter : int
         Maximum iterations. Default 10_000.
-    copy_meta : bool
+    copy_metadata : bool
         Copy metadata frame if present. Default True.
     """
 
     tolerance: float = 1e-5
     max_iter: int = 10_000
-    copy_meta: bool = True
+    copy_metadata: bool = True
     supported_modes = ["similarity"]
 
     def apply(self, G: Graph) -> Graph:
@@ -55,7 +55,7 @@ class DoublyStochasticNormalize(GraphOperator):
                 directed=G.directed,
                 weighted=True,
                 mode=G.mode,
-                meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+                metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
                 sym_op="max",
             )
 
@@ -137,7 +137,7 @@ class DoublyStochasticNormalize(GraphOperator):
             directed=G.directed,
             weighted=True,
             mode=G.mode,
-            meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+            metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
             sym_op="max",
         )
 
@@ -165,13 +165,13 @@ class DoublyStochasticBackbone(GraphOperator):
     max_iter : int
         Maximum Sinkhorn iterations passed to DoublyStochasticNormalize.
         Default 10_000.
-    copy_meta : bool
+    copy_metadata : bool
         Copy metadata frame if present. Default True.
     """
 
     tolerance: float = 1e-5
     max_iter: int = 10_000
-    copy_meta: bool = True
+    copy_metadata: bool = True
     supported_modes = ["similarity"]
 
     def apply(self, G: Graph) -> Graph:
@@ -185,7 +185,7 @@ class DoublyStochasticBackbone(GraphOperator):
         normalized = DoublyStochasticNormalize(
             tolerance=self.tolerance,
             max_iter=self.max_iter,
-            copy_meta=self.copy_meta,
+            copy_metadata=self.copy_metadata,
         ).apply(G)
 
         A_scaled = normalized.adj.tocsr(copy=False)
@@ -203,7 +203,7 @@ class DoublyStochasticBackbone(GraphOperator):
             directed=G.directed,
             weighted=True,
             mode=G.mode,
-            meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+            metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
             sym_op="max",
         )
 

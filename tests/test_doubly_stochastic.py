@@ -275,15 +275,15 @@ def test_doubly_stochastic_all_zero_matrix_noop():
 def test_doubly_stochastic_preserves_flags_and_copies_metadata():
     meta = pd.DataFrame({"name": ["a", "b", "c"], "group": [1, 0, 1]})
     A = _csr([0.4, 0.6, 0.3], [0, 1, 2], [1, 2, 0], 3)
-    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", meta=meta, sym_op="max")
+    G0 = Graph.from_csr(A, directed=False, weighted=True, mode="similarity", metadata=meta, sym_op="max")
 
-    op = DoublyStochasticNormalize(tolerance=1e-6, max_iter=10_000, copy_meta=True)
+    op = DoublyStochasticNormalize(tolerance=1e-6, max_iter=10_000, copy_metadata=True)
     G = op.apply(G0)
 
     # Flags
     assert not G.directed and G.weighted
 
     # Metadata copied: changing original shouldn't affect result
-    if G.meta is not None:
+    if G.metadata is not None:
         meta.loc[0, "group"] = 999
-        assert G.meta.loc[0, "group"] == 1
+        assert G.metadata.loc[0, "group"] == 1

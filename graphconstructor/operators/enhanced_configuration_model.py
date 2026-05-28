@@ -253,7 +253,7 @@ class EnhancedConfigurationModelFilter(GraphOperator):
         normalized similarities in [0, 1] using the quantile strategy. Use
         ``None`` to force raw weights, or ``"quantile"``/``"linear"`` to force
         pseudo-count conversion.
-    copy_meta : bool, default=True
+    copy_metadata : bool, default=True
         If ``True``, copy graph metadata to the returned graph. If ``False``,
         keep the original metadata reference.
     x_transform_idx : int, default=0
@@ -273,7 +273,7 @@ class EnhancedConfigurationModelFilter(GraphOperator):
     """
     alpha: float = 0.05
     replace_weights_by_p_values: bool = False
-    copy_meta: bool = True
+    copy_metadata: bool = True
     x_transform_idx: int = 0
     y_transform_idx: int = 0
     weight_conversion: str = "auto"
@@ -404,7 +404,7 @@ class EnhancedConfigurationModelFilter(GraphOperator):
             directed=False,
             weighted=True,
             mode=G.mode,
-            meta=(G.meta.copy() if (self.copy_meta and G.meta is not None) else G.meta),
+            metadata=(G.metadata.copy() if (self.copy_metadata and G.metadata is not None) else G.metadata),
             sym_op="max",
         )
     
