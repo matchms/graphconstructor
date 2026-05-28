@@ -495,6 +495,93 @@ def test_to_igraph_types_and_attributes():
     assert "weight" in igG.es.attributes()
 
 
+def test_to_cytoscape_returns_expected_nodes_edges_and_metadata():
+    A = _csr([0.5, 0.7], [0, 1], [1, 2], 3)
+    meta = pd.DataFrame({
+        "name": ["n0", "n1", "n2"],
+        "group": ["a", "b", "a"],
+    })
+    G = Graph.from_csr(
+        A,
+        directed=False,
+        weighted=True,
+        mode="similarity",
+        meta=meta,
+    )
+
+    cy = G.to_cytoscape()
+
+    assert set(cy.keys()) == {"data", "elements"}
+    assert cy["data"]["directed"] is False
+    assert cy["data"]["weighted"] is True
+    assert cy["data"]["mode"] == "similarity"
+
+    nodes = cy["elements"]["nodes"]
+    edges = cy["elements"]["edges"]
+
+    assert len(nodes) == 3
+    assert len(edges) == 2
+
+    assert nodes[0]["data"]["id"] == "0"
+    assert nodes[0]["data"]["index"] == 0
+    assert nodes[0]["data"]["label"] == "n0"
+    assert nodes[0]["data"]["name"] == "n0"
+    assert nodes[0]["data"]["group"] == "a"
+
+    edge_data = {tuple(sorted((e["data"]["source"], e["data"]["target"]))): e["data"] for e in edges}
+
+    assert set(edge_data) == {("0", "1"), ("1", "2")}
+    assert edge_data[("0", "1")]["weight"] == pytest.approx(0.5)
+    assert edge_data[("1", "2")]["weight"] == pytest.approx(0.7)
+
+
+def test_to_cytoscape_writes_json_and_uses_custom_node_ids(tmp_path):
+    import json
+
+    A = _csr([1.0, 2.0], [0, 1], [1, 2], 3)
+    meta = pd.DataFrame({
+        "id": ["a", "b", "c"],
+        "name": ["node-a", "node-b", "node-c"],
+    })
+    G = Graph.from_csr(
+        A,
+        directed=True,
+        weighted=True,
+        mode="distance",
+        meta=meta,
+    )
+
+    path = tmp_path / "graph.cyjs"
+    returned = G.to_cytoscape(path, node_id_col="id")
+
+    with open(path, encoding="utf-8") as f:
+        loaded = json.load(f)
+
+    assert loaded == returned
+
+    nodes = loaded["elements"]["nodes"]
+    edges = loaded["elements"]["edges"]
+
+    assert [node["data"]["id"] for node in nodes] == ["a", "b", "c"]
+    assert [node["data"]["label"] for node in nodes] == ["node-a", "node-b", "node-c"]
+
+    assert len(edges) == 2
+    assert edges[0]["data"]["source"] == "a"
+    assert edges[0]["data"]["target"] == "b"
+    assert edges[0]["data"]["weight"] == pytest.approx(1.0)
+    assert edges[1]["data"]["source"] == "b"
+    assert edges[1]["data"]["target"] == "c"
+    assert edges[1]["data"]["weight"] == pytest.approx(2.0)
+
+
+def test_to_cytoscape_rejects_duplicate_custom_node_ids():
+    A = _csr([1.0], [0], [1], 2)
+    meta = pd.DataFrame({"id": ["same", "same"]})
+    G = Graph.from_csr(A, directed=False, weighted=True, mode="distance", meta=meta)
+
+    with pytest.raises(ValueError, match="node IDs must be unique"):
+        G.to_cytoscape(node_id_col="id")
+
 
 # ----------------- Distance/similarity conversion -----------------
 def test_convert_mode_distance_to_similarity_and_back_dense(S_dense, meta_df):
