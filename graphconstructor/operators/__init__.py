@@ -2,6 +2,7 @@ from .base import GraphOperator
 from .disparity import DisparityFilter
 from .doubly_stochastic import DoublyStochasticBackbone, DoublyStochasticNormalize
 from .enhanced_configuration_model import EnhancedConfigurationModelFilter
+from .high_similarity import HighSimilarityFilter
 from .knn_selector import KNNSelector
 from .locally_adaptive_sparsification import LocallyAdaptiveSparsification
 from .marginal_likelihood import MarginalLikelihoodFilter
@@ -17,6 +18,7 @@ __all__ = [
     "DoublyStochasticBackbone",
     "EnhancedConfigurationModelFilter",
     "GraphOperator",
+    "HighSimilarityFilter",
     "KNNSelector",
     "LocallyAdaptiveSparsification",
     "MarginalLikelihoodFilter",
