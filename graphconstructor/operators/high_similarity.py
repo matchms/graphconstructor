@@ -10,6 +10,22 @@ Method = Literal["PA", "LP"]
 
 @dataclass(slots=True)
 class HighSimilarityFilter(GraphOperator):
+    """
+    Extract a weighted undirected backbone using the HighSimilarityFilter (HS).
+
+    Parameters
+    ----------
+    k : float, default=0.5
+        Threshold for retaining edges. Smaller values produce
+        sparser backbones.
+    method : {"PA", "LP"}, default="PA"
+        Link-prediction function. PA=Preferential Attachment, LP=Local Path Index.
+
+    References
+    ----------
+    Paper: https://link.springer.com/article/10.1007/s41109-025-00705-y
+    """
+
     k: float = 0.5
     method: Method = "PA"
     supported_modes = ["similarity"]
